@@ -20,6 +20,8 @@ const { handleRekonCommand, handleValinsCommand } = require('./commands/rekon');
 const handleInseraCommand = require('./commands/insera');
 const handleBimaCommand = require('./commands/bima');
 const handleMappingCommand = require('./commands/mapping');
+const handleTiketCommand = require('./commands/tiket');
+const handleQcCommand = require('./commands/qc');
 
 console.log('=============================================');
 console.log('🚀 WFM TELEGRAM BOT ENGINE STARTING...');
@@ -74,12 +76,18 @@ console.log(`✅ [Schedulers] All 9 cron jobs registered with timezone: ${TIMEZO
 // -------------------------------------------------------------
 if (interactiveBot) {
   interactiveBot.start((ctx) => {
-    ctx.reply(`👋 Halo *${ctx.from.first_name || 'Rekan'}*!\n\nSaya adalah Bot Asisten WFM. Berikut perintah yang bisa digunakan:\n\n` +
+    ctx.reply(
+      `👋 Halo *${ctx.from.first_name || 'Rekan'}*!\n\n` +
+      `Saya adalah Bot Asisten WFM. Berikut perintah yang bisa digunakan:\n\n` +
       `• \`/mapping <sektor>\` - Mapping WO per sektor (satui/batulicin/kotabaru)\n` +
+      `• \`/tiket <sektor>\` - Monitoring sisa tiket per sektor\n` +
+      `• \`/qc\` - Rekapitulasi QC Reject (NOK)\n` +
       `• \`/rekon <nama_tim>\` - Cek rekon MTD\n` +
       `• \`/valins <nama_tim>\` - Cek valins ONT\n` +
       `• \`/insera <incident>\` - Cari detail tiket Insera (atau langsung ketik \`INC...\`)\n` +
-      `• \`/bima <track_order>\` - Cari detail order BIMA (atau langsung ketik \`AOi...\`)\n`, { parse_mode: 'Markdown' });
+      `• \`/bima <track_order>\` - Cari detail order BIMA (atau langsung ketik \`AOi...\`)\n`,
+      { parse_mode: 'Markdown' }
+    );
   });
 
   // /mapping <sektor>
@@ -87,6 +95,18 @@ if (interactiveBot) {
     const parts = ctx.message.text.trim().split(/\s+/);
     const args = parts.slice(1).join(' ').trim();
     handleMappingCommand(ctx, args);
+  });
+
+  // /tiket <sektor>
+  interactiveBot.command('tiket', (ctx) => {
+    const parts = ctx.message.text.trim().split(/\s+/);
+    const args = parts.slice(1).join(' ').trim();
+    handleTiketCommand(ctx, args);
+  });
+
+  // /qc
+  interactiveBot.command('qc', (ctx) => {
+    handleQcCommand(ctx);
   });
 
   // /rekon <tim>
