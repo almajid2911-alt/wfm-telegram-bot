@@ -1,5 +1,5 @@
 const { getSheetRows } = require('../config/google');
-const { broadcastBot, sendMessage } = require('../config/telegram');
+const { broadcastBot, sendOrReplaceBroadcast } = require('../config/telegram');
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_DATA_WFM_ID || '1m5bgXaDBFAhwKJlLRdPsgf4pJBA0YhFhR6C9bDytm-I';
 const SHEET_NAME = 'FFG';
@@ -31,7 +31,7 @@ async function runFfg() {
       .join('\n\n');
 
     const message = `🚨 GARANSI TERDETEKSI LOS BELUM ADA TIKET GANGGUAN\n\n${laporan}`;
-    await sendMessage(broadcastBot, TARGET_CHAT_ID, message.trim());
+    await sendOrReplaceBroadcast(broadcastBot, TARGET_CHAT_ID, 'FFG', message.trim(), { parse_mode: undefined });
   } catch (err) {
     console.error('[Scheduler Error] FFG:', err.message);
   }

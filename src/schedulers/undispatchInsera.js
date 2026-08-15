@@ -1,9 +1,8 @@
 const { getSheetRows } = require('../config/google');
-const { broadcastBot, sendMessage } = require('../config/telegram');
+const { broadcastBot, sendOrReplaceBroadcast } = require('../config/telegram');
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_KAWAN_ID || '1gTlZxWfKlCENvDVEDKS_qHrLqNLBXsFsy0utTv2u_hY';
 const SHEET_NAME = 'PANTAU TTR';
-// Target grup Undispatch Insera (mendukung multiple grup)
 const TARGET_CHATS = (process.env.CHAT_IDS_UNDISPATCH_INSERA || process.env.CHAT_ID_UNDISPATCH_INSERA || '-1003190090092,-1004473705354').split(',');
 
 async function runUndispatchInsera() {
@@ -91,7 +90,7 @@ async function runUndispatchInsera() {
     for (const chatId of TARGET_CHATS) {
       const cleanId = chatId.trim();
       if (cleanId && cleanId.startsWith('-')) {
-        await sendMessage(broadcastBot, cleanId, finalMsg, { parse_mode: undefined });
+        await sendOrReplaceBroadcast(broadcastBot, cleanId, 'UNDISPATCH_INSERA', finalMsg, { parse_mode: undefined });
       }
     }
   } catch (err) {

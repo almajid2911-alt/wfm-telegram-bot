@@ -1,5 +1,5 @@
 const { getSheetRows } = require('../config/google');
-const { broadcastBot, sendMessage } = require('../config/telegram');
+const { broadcastBot, sendOrReplaceBroadcast } = require('../config/telegram');
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_DATA_WFM_ID || '1m5bgXaDBFAhwKJlLRdPsgf4pJBA0YhFhR6C9bDytm-I';
 const SHEET_NAME = 'FAILWA';
@@ -9,6 +9,8 @@ async function runRemindFailwa() {
   console.log('[Scheduler] Running Remind Failwa...');
   try {
     const rows = await getSheetRows(SPREADSHEET_ID, SHEET_NAME);
+    if (!rows.length) return;
+
     const norm = v => String(v ?? '').trim();
     const upper = v => norm(v).toUpperCase();
 
@@ -27,9 +29,9 @@ async function runRemindFailwa() {
       text += `• ${norm(r.Workorder)} | ${norm(r.TIM) || '-'} | ${norm(r.MORNING) || '-'}\n`;
     });
 
-    await sendMessage(broadcastBot, TARGET_CHAT_ID, text.trim());
+    await sendOrReplaceBroadcast(broadcastBot, TARGET_CHAT_ID, 'FAILWA', text.trim(), { parse_mode: undefined });
   } catch (err) {
-    console.error('[Scheduler Error] Remind Failwa:', err.message);
+    console.error('[Scheduler Error] Failwa:', err.message);
   }
 }
 

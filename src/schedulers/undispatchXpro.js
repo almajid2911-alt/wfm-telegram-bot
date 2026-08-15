@@ -1,5 +1,5 @@
 const { getSheetRows } = require('../config/google');
-const { broadcastBot, sendMessage } = require('../config/telegram');
+const { broadcastBot, sendOrReplaceBroadcast } = require('../config/telegram');
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_DATA_WFM_ID || '1m5bgXaDBFAhwKJlLRdPsgf4pJBA0YhFhR6C9bDytm-I';
 const SHEET_NAME = 'UNDISPATCH XPRO';
@@ -44,8 +44,9 @@ async function runUndispatchXpro() {
 
     const finalMsg = message.trim();
     for (const chatId of TARGET_CHATS) {
-      if (chatId.trim()) {
-        await sendMessage(broadcastBot, chatId.trim(), finalMsg);
+      const cleanId = chatId.trim();
+      if (cleanId && cleanId.startsWith('-')) {
+        await sendOrReplaceBroadcast(broadcastBot, cleanId, 'UNDISPATCH_XPRO', finalMsg, { parse_mode: undefined });
       }
     }
   } catch (err) {

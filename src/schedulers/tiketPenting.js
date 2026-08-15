@@ -1,5 +1,5 @@
 const { getSheetRows } = require('../config/google');
-const { broadcastBot, sendMessage } = require('../config/telegram');
+const { broadcastBot, sendOrReplaceBroadcast } = require('../config/telegram');
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_KAWAN_ID || '1gTlZxWfKlCENvDVEDKS_qHrLqNLBXsFsy0utTv2u_hY';
 const SHEET_NAME = 'KAWAL KETAT';
@@ -70,7 +70,7 @@ async function runTiketPenting() {
     const messageContent = sections.join('\n\n');
     const fullMessage = `Moban di bantu kawal sampai close sesuai Target TTR nya \n\n@AdtyaR @was1tuha @Samyusuf01\n\n${messageContent}`;
 
-    await sendMessage(broadcastBot, TARGET_CHAT_ID, fullMessage);
+    await sendOrReplaceBroadcast(broadcastBot, TARGET_CHAT_ID, 'TIKET_PENTING', fullMessage);
   } catch (err) {
     console.error('[Scheduler Error] Tiket Penting:', err.message);
   }

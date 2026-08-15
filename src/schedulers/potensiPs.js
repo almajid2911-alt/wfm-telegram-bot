@@ -1,9 +1,8 @@
 const { getSheetRows } = require('../config/google');
-const { broadcastBot, sendMessage } = require('../config/telegram');
+const { broadcastBot, sendOrReplaceBroadcast } = require('../config/telegram');
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_DATA_WFM_ID || '1m5bgXaDBFAhwKJlLRdPsgf4pJBA0YhFhR6C9bDytm-I';
 const SHEET_NAME = 'POTENSI';
-// Hanya kirim ke grup operasional WFM (Group ID diawali tanda minus '-')
 const TARGET_CHATS = (process.env.CHAT_IDS_POTENSI || '-1002616721208').split(',');
 
 const norm = v => String(v ?? '').trim();
@@ -110,9 +109,8 @@ async function runPotensiPs() {
 
     for (const chatId of TARGET_CHATS) {
       const cleanId = chatId.trim();
-      // Pastikan hanya kirim ke Grup (ID grup diawali '-')
       if (cleanId && cleanId.startsWith('-')) {
-        await sendMessage(broadcastBot, cleanId, message);
+        await sendOrReplaceBroadcast(broadcastBot, cleanId, 'POTENSI_PS', message);
       }
     }
   } catch (err) {

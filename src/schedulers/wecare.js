@@ -1,5 +1,5 @@
 const { getSheetRows } = require('../config/google');
-const { broadcastBot, sendMessage } = require('../config/telegram');
+const { broadcastBot, sendOrReplaceBroadcast } = require('../config/telegram');
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_DATA_WFM_ID || '1m5bgXaDBFAhwKJlLRdPsgf4pJBA0YhFhR6C9bDytm-I';
 const SHEET_NAME = 'WECARE';
@@ -110,7 +110,6 @@ async function runWecare() {
       }
 
       if (hasOtherAction) {
-        // Urutkan prioritas: ODP NON COVER duluan, lalu ODP RUSAK, dll
         const order = ['ODP NON COVER', 'ODP RUSAK'];
         const sortedKeys = Object.keys(otherNeedActionMap).sort((a, b) => {
           const idxA = order.indexOf(a) !== -1 ? order.indexOf(a) : 99;
@@ -133,7 +132,7 @@ async function runWecare() {
       }
     }
 
-    await sendMessage(broadcastBot, TARGET_CHAT_ID, msg.trimEnd(), { parse_mode: undefined });
+    await sendOrReplaceBroadcast(broadcastBot, TARGET_CHAT_ID, 'WECARE', msg.trimEnd(), { parse_mode: undefined });
   } catch (err) {
     console.error('[Scheduler Error] Wecare:', err.message);
   }
