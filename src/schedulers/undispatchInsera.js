@@ -3,7 +3,8 @@ const { broadcastBot, sendMessage } = require('../config/telegram');
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_KAWAN_ID || '1gTlZxWfKlCENvDVEDKS_qHrLqNLBXsFsy0utTv2u_hY';
 const SHEET_NAME = 'PANTAU TTR';
-const TARGET_CHAT_ID = process.env.CHAT_ID_UNDISPATCH_INSERA || '-1003190090092';
+// Target grup Undispatch Insera (mendukung multiple grup)
+const TARGET_CHATS = (process.env.CHAT_IDS_UNDISPATCH_INSERA || process.env.CHAT_ID_UNDISPATCH_INSERA || '-1003190090092,-1004473705354').split(',');
 
 async function runUndispatchInsera() {
   console.log('[Scheduler] Running Undispatch Insera...');
@@ -85,8 +86,14 @@ async function runUndispatchInsera() {
       output += '\n';
     });
 
-    // Plain text send (anti markdown parse error)
-    await sendMessage(broadcastBot, TARGET_CHAT_ID, output.trim(), { parse_mode: undefined });
+    const finalMsg = output.trim();
+
+    for (const chatId of TARGET_CHATS) {
+      const cleanId = chatId.trim();
+      if (cleanId && cleanId.startsWith('-')) {
+        await sendMessage(broadcastBot, cleanId, finalMsg, { parse_mode: undefined });
+      }
+    }
   } catch (err) {
     console.error('[Scheduler Error] Undispatch Insera:', err.message);
   }
