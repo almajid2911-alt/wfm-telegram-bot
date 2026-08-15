@@ -9,14 +9,27 @@ async function getSheetsClient() {
 
   let auth;
   if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-    const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    const credentials = typeof process.env.GOOGLE_SERVICE_ACCOUNT_JSON === 'string'
+      ? JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON)
+      : process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
     auth = new google.auth.GoogleAuth({
       credentials,
       scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly', 'https://www.googleapis.com/auth/spreadsheets']
     });
   } else {
-    const credPath = process.env.GOOGLE_CREDENTIALS_PATH || path.resolve(__dirname, '../../../credentials.json');
-    if (fs.existsSync(credPath)) {
+    // Search possible locations for credentials.json
+    const possiblePaths = [
+      process.env.GOOGLE_CREDENTIALS_PATH,
+      path.resolve(process.cwd(), 'credentials.json'),
+      path.resolve(__dirname, '../../credentials.json'),
+      path.resolve(__dirname, '../../../credentials.json'),
+      path.resolve(__dirname, '../credentials.json'),
+      path.resolve(__dirname, 'credentials.json')
+    ].filter(Boolean);
+
+    let credPath = possiblePaths.find(p => fs.existsSync(p));
+
+    if (credPath) {
       auth = new google.auth.GoogleAuth({
         keyFile: credPath,
         scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly', 'https://www.googleapis.com/auth/spreadsheets']
