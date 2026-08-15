@@ -1,3 +1,4 @@
+const { Markup } = require('telegraf');
 const { getSheetRows } = require('../config/google');
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_DATA_WFM_ID || '1m5bgXaDBFAhwKJlLRdPsgf4pJBA0YhFhR6C9bDytm-I';
@@ -7,6 +8,13 @@ const escapeMarkdown = (text) => {
   if (!text) return '';
   return text.toString().replace(/([*_[\]`])/g, '\\$1');
 };
+
+function formatWhatsappNumber(phone) {
+  let clean = String(phone || '').replace(/[^0-9]/g, '');
+  if (clean.startsWith('0')) clean = '62' + clean.slice(1);
+  if (clean.startsWith('8')) clean = '62' + clean;
+  return clean.length >= 9 ? clean : null;
+}
 
 async function handleBimaCommand(ctx, rawKeyword) {
   const searchedTicket = (rawKeyword || '').trim().toUpperCase();
@@ -68,7 +76,17 @@ async function handleBimaCommand(ctx, rawKeyword) {
     msg += `🏷️ *Paket:* ${paket}\n`;
     msg += `🏠 *Address:* ${address}`;
 
-    await ctx.reply(msg, { parse_mode: 'Markdown' });
+    const waPhone = formatWhatsappNumber(contactNumber);
+    const buttons = [];
+    if (waPhone) {
+      buttons.push([Markup.button.url('💬 Chat WhatsApp Pelanggan', `https://wa.me/${waPhone}`)]);
+    }
+
+    if (buttons.length > 0) {
+      await ctx.reply(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    } else {
+      await ctx.reply(msg, { parse_mode: 'Markdown' });
+    }
   } catch (err) {
     console.error('[Command Error] /bima:', err.message);
     ctx.reply('❌ Error: ' + err.message);

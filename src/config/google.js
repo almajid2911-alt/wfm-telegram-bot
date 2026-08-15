@@ -4,6 +4,10 @@ const fs = require('fs');
 
 let sheetsInstance = null;
 
+// In-Memory Smart Cache (TTL 20 Detik)
+const cache = new Map();
+const CACHE_TTL_MS = 20 * 1000;
+
 async function getSheetsClient() {
   if (sheetsInstance) return sheetsInstance;
 
@@ -17,7 +21,6 @@ async function getSheetsClient() {
       scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly', 'https://www.googleapis.com/auth/spreadsheets']
     });
   } else {
-    // Search possible locations for credentials.json
     const possiblePaths = [
       process.env.GOOGLE_CREDENTIALS_PATH,
       path.resolve(process.cwd(), 'credentials.json'),
@@ -44,9 +47,19 @@ async function getSheetsClient() {
 }
 
 /**
- * Fetch rows from a Google Sheet tab and convert to array of objects
+ * Fetch rows from a Google Sheet tab with 20s In-Memory Cache
  */
-async function getSheetRows(spreadsheetId, sheetName) {
+async function getSheetRows(spreadsheetId, sheetName, forceFresh = false) {
+  const cacheKey = `${spreadsheetId}_${sheetName}`;
+  const now = Date.now();
+
+  if (!forceFresh && cache.has(cacheKey)) {
+    const cached = cache.get(cacheKey);
+    if (now - cached.timestamp < CACHE_TTL_MS) {
+      return cached.data;
+    }
+  }
+
   const sheets = await getSheetsClient();
   const range = `'${sheetName}'!A1:ZZ`;
   const res = await sheets.spreadsheets.values.get({
@@ -55,7 +68,10 @@ async function getSheetRows(spreadsheetId, sheetName) {
   });
 
   const rows = res.data.values;
-  if (!rows || rows.length === 0) return [];
+  if (!rows || rows.length === 0) {
+    cache.set(cacheKey, { data: [], timestamp: now });
+    return [];
+  }
 
   const headers = rows[0].map(h => String(h ?? '').trim());
   const data = [];
@@ -74,6 +90,7 @@ async function getSheetRows(spreadsheetId, sheetName) {
     if (hasData) data.push(rowObj);
   }
 
+  cache.set(cacheKey, { data, timestamp: now });
   return data;
 }
 

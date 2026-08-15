@@ -1,3 +1,4 @@
+const { Markup } = require('telegraf');
 const { getSheetRows } = require('../config/google');
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_DATA_WFM_ID || '1m5bgXaDBFAhwKJlLRdPsgf4pJBA0YhFhR6C9bDytm-I';
@@ -37,7 +38,20 @@ async function handleMappingCommand(ctx, inputRaw) {
     zones = ['STI', 'PGT', 'KIP'];
     sektorName = 'SATUI';
   } else {
-    return ctx.reply('❌ *Format Salah!*\n\nGunakan:\n`/mapping batulicin`\n`/mapping kotabaru`\n`/mapping satui`\natau: `/mapping satui, batulicin`', { parse_mode: 'Markdown' });
+    // Tampilkan tombol pilihan sektor jika tidak ada argumen
+    return ctx.reply(
+      '📍 *PILIH SEKTOR MAPPING WO*\n\nSilakan pilih salah satu tombol sektor di bawah:',
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [
+            Markup.button.callback('🏙️ Batulicin', 'map_batulicin'),
+            Markup.button.callback('🏝️ Kotabaru', 'map_kotabaru'),
+            Markup.button.callback('🌾 Satui', 'map_satui')
+          ]
+        ])
+      }
+    );
   }
 
   try {

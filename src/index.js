@@ -75,17 +75,44 @@ console.log(`✅ [Schedulers] All 9 cron jobs registered with timezone: ${TIMEZO
 // 2. SETUP INTERACTIVE BOT COMMANDS
 // -------------------------------------------------------------
 if (interactiveBot) {
+  // Daftarkan menu popup command resmi di Telegram
+  interactiveBot.telegram.setMyCommands([
+    { command: 'mapping', description: '📊 Mapping WO per sektor' },
+    { command: 'tiket', description: '🎫 Monitoring sisa tiket per sektor' },
+    { command: 'qc', description: '🚫 Rekapitulasi QC Reject (NOK)' },
+    { command: 'insera', description: '📌 Cari detail tiket gangguan' },
+    { command: 'bima', description: '📦 Cari detail order layanan BIMA' },
+    { command: 'rekon', description: '📋 Cek rekon MTD tim' },
+    { command: 'valins', description: '🔌 Cek valins ONT baru tim' },
+    { command: 'help', description: '🤖 Bantuan daftar perintah' }
+  ]).catch(err => console.error('Failed to set my commands:', err.message));
+
   interactiveBot.start((ctx) => {
     ctx.reply(
       `👋 Halo *${ctx.from.first_name || 'Rekan'}*!\n\n` +
       `Saya adalah Bot Asisten WFM. Berikut perintah yang bisa digunakan:\n\n` +
-      `• \`/mapping <sektor>\` - Mapping WO per sektor (satui/batulicin/kotabaru)\n` +
+      `• \`/mapping <sektor>\` - Mapping WO per sektor\n` +
       `• \`/tiket <sektor>\` - Monitoring sisa tiket per sektor\n` +
       `• \`/qc\` - Rekapitulasi QC Reject (NOK)\n` +
       `• \`/rekon <nama_tim>\` - Cek rekon MTD\n` +
       `• \`/valins <nama_tim>\` - Cek valins ONT\n` +
       `• \`/insera <incident>\` - Cari detail tiket Insera (atau langsung ketik \`INC...\`)\n` +
       `• \`/bima <track_order>\` - Cari detail order BIMA (atau langsung ketik \`AOi...\`)\n`,
+      { parse_mode: 'Markdown' }
+    );
+  });
+
+  // /help
+  interactiveBot.help((ctx) => {
+    ctx.reply(
+      `🤖 *MENU BANTUAN BOT ASISTEN WFM*\n\n` +
+      `📌 *1. MAPPING SEKTOR*\nFormat: \`/mapping <sektor>\`\nContoh: \`/mapping batulicin\`\n\n` +
+      `📌 *2. TIKET SEKTOR*\nFormat: \`/tiket <sektor>\`\nContoh: \`/tiket batulicin\`\n\n` +
+      `📌 *3. REKAP QC REJECT (NOK)*\nFormat: \`/qc\`\n\n` +
+      `📌 *4. DETAIL TIKET INSERA*\nFormat: \`/insera <INC>\` atau langsung ketik nomor \`INC...\`\n\n` +
+      `📌 *5. DETAIL ORDER BIMA*\nFormat: \`/bima <WO>\` atau langsung ketik nomor \`AOi...\`\n\n` +
+      `📌 *6. REKON TIM*\nFormat: \`/rekon <nama_tim>\`\n\n` +
+      `📌 *7. VALINS TIM*\nFormat: \`/valins <nama_tim>\``,
       { parse_mode: 'Markdown' }
     );
   });
@@ -137,6 +164,33 @@ if (interactiveBot) {
     const parts = ctx.message.text.trim().split(/\s+/);
     const kw = parts.slice(1).join(' ').trim();
     handleBimaCommand(ctx, kw);
+  });
+
+  // Callback Query Handlers (Tombol Sektor)
+  interactiveBot.action('map_batulicin', (ctx) => {
+    ctx.answerCbQuery();
+    handleMappingCommand(ctx, 'batulicin');
+  });
+  interactiveBot.action('map_kotabaru', (ctx) => {
+    ctx.answerCbQuery();
+    handleMappingCommand(ctx, 'kotabaru');
+  });
+  interactiveBot.action('map_satui', (ctx) => {
+    ctx.answerCbQuery();
+    handleMappingCommand(ctx, 'satui');
+  });
+
+  interactiveBot.action('tkt_batulicin', (ctx) => {
+    ctx.answerCbQuery();
+    handleTiketCommand(ctx, 'batulicin');
+  });
+  interactiveBot.action('tkt_kotabaru', (ctx) => {
+    ctx.answerCbQuery();
+    handleTiketCommand(ctx, 'kotabaru');
+  });
+  interactiveBot.action('tkt_satui', (ctx) => {
+    ctx.answerCbQuery();
+    handleTiketCommand(ctx, 'satui');
   });
 
   // Listener untuk pesan teks langsung (tanpa slash command)

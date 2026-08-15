@@ -1,3 +1,4 @@
+const { Markup } = require('telegraf');
 const { getSheetRows } = require('../config/google');
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_KAWAN_ID || '1gTlZxWfKlCENvDVEDKS_qHrLqNLBXsFsy0utTv2u_hY';
@@ -7,6 +8,13 @@ const escapeMarkdown = (text) => {
   if (!text) return '';
   return text.toString().replace(/([*_[\]`])/g, '\\$1');
 };
+
+function formatWhatsappNumber(phone) {
+  let clean = String(phone || '').replace(/[^0-9]/g, '');
+  if (clean.startsWith('0')) clean = '62' + clean.slice(1);
+  if (clean.startsWith('8')) clean = '62' + clean;
+  return clean.length >= 9 ? clean : null;
+}
 
 async function handleInseraCommand(ctx, rawTicket) {
   const searchedTicket = (rawTicket || '').trim().toUpperCase();
@@ -76,7 +84,17 @@ async function handleInseraCommand(ctx, rawTicket) {
     msg += '📝 *Summary:*\n';
     msg += summary;
 
-    await ctx.reply(msg, { parse_mode: 'Markdown' });
+    const waPhone = formatWhatsappNumber(contactPhone);
+    const buttons = [];
+    if (waPhone) {
+      buttons.push([Markup.button.url('💬 Chat WhatsApp Pelanggan', `https://wa.me/${waPhone}`)]);
+    }
+
+    if (buttons.length > 0) {
+      await ctx.reply(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    } else {
+      await ctx.reply(msg, { parse_mode: 'Markdown' });
+    }
   } catch (err) {
     console.error('[Command Error] /insera:', err.message);
     ctx.reply('❌ Error: ' + err.message);

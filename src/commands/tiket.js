@@ -1,3 +1,4 @@
+const { Markup } = require('telegraf');
 const { getSheetRows } = require('../config/google');
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_KAWAN_ID || '1gTlZxWfKlCENvDVEDKS_qHrLqNLBXsFsy0utTv2u_hY';
@@ -51,8 +52,17 @@ async function handleTiketCommand(ctx, inputRaw) {
 
   if (zones.length === 0) {
     return ctx.reply(
-      '❌ *Format Salah!*\n\nGunakan:\n`/tiket batulicin`\n`/tiket kotabaru`\n`/tiket satui`\natau gabungan: `/tiket satui, batulicin, kotabaru`',
-      { parse_mode: 'Markdown' }
+      '🎫 *PILIH SEKTOR MONITORING TIKET*\n\nSilakan pilih salah satu tombol sektor di bawah:',
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [
+            Markup.button.callback('🏙️ Batulicin', 'tkt_batulicin'),
+            Markup.button.callback('🏝️ Kotabaru', 'tkt_kotabaru'),
+            Markup.button.callback('🌾 Satui', 'tkt_satui')
+          ]
+        ])
+      }
     );
   }
 
