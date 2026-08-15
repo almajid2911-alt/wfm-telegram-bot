@@ -19,7 +19,7 @@ function getField(obj, possibleNames) {
   }
   for (const name of possibleNames) {
     const found = normalizedMap[normalizeKey(name)];
-    if (found !== undefined) return found;
+    if (found !== undefined && found !== null && found !== '') return String(found).trim();
   }
   return '';
 }
@@ -30,13 +30,19 @@ function getSegmentGroup(segment) {
   const upper = raw.toUpperCase();
   if (upper === 'INDIHOME') return '🏠 INDIHOME';
   if (upper === 'INDIBIZ')  return '🏢 INDIBIZ';
-  if (upper === 'PDA')      return '🏬 PDA';
+  if (upper === 'PDA')      return '🏢 PDA';
   return `📦 ${upper}`;
 }
 
 function formatDurasi(value) {
-  const num = parseFloat(value);
-  if (isNaN(num)) return '0 JAM';
+  if (!value) return '0 JAM';
+  const cleanVal = String(value).trim().replace(/\./g, '').replace(',', '.');
+  const num = parseFloat(cleanVal);
+  if (isNaN(num)) {
+    const directNum = parseFloat(String(value).replace(',', '.'));
+    if (isNaN(directNum)) return '0 JAM';
+    return `${directNum.toFixed(2).replace(/\.?0+$/, '').replace('.', ',')} JAM`;
+  }
   let fixed = num.toFixed(2).replace(/\.?0+$/, '').replace('.', ',');
   return `${fixed} JAM`;
 }
@@ -45,7 +51,7 @@ async function runPotensiPs() {
   console.log('[Scheduler] Running Potensi PS...');
   try {
     const rows = await getSheetRows(SPREADSHEET_ID, SHEET_NAME);
-    if (!rows.length) return;
+    if (!rows || !rows.length) return;
 
     const groupQC = {};
 
@@ -83,9 +89,14 @@ async function runPotensiPs() {
 
     if (!sortedQC.length) return;
 
-    const lines = ['📊 *LIST POTENSI PS*', ''];
+    const lines = [];
+    lines.push('📊 LIST POTENSI PS');
+    lines.push('');
+
     for (const qcName of sortedQC) {
-      lines.push(`🟡 *${qcName.toUpperCase()}*`, '');
+      lines.push(`🟡 ${qcName.toUpperCase()}`);
+      lines.push('');
+
       const segmentGroups = groupQC[qcName];
 
       for (const seg in segmentGroups) {
@@ -94,13 +105,16 @@ async function runPotensiPs() {
 
         sortedItems.forEach(item => {
           let line = `• ${item.wo} | ${item.team} | ${item.durasi}`;
-          if (item.isValcomp) line += ' (VALCOMP)';
+          if (item.isValcomp) {
+            line += ' (VALCOMP)';
+          }
           lines.push(line);
 
           if (normU(qcName) !== 'BELUM DORONG') {
             lines.push(`   • ESKAL DAMAN : ${item.eskal}`);
           }
         });
+
         lines.push('');
       }
     }
@@ -110,7 +124,7 @@ async function runPotensiPs() {
     for (const chatId of TARGET_CHATS) {
       const cleanId = chatId.trim();
       if (cleanId && cleanId.startsWith('-')) {
-        await sendOrReplaceBroadcast(broadcastBot, cleanId, 'POTENSI_PS', message);
+        await sendOrReplaceBroadcast(broadcastBot, cleanId, 'POTENSI_PS', message, { parse_mode: undefined });
       }
     }
   } catch (err) {
