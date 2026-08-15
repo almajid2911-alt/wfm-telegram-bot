@@ -65,24 +65,24 @@ async function runWecare() {
       return;
     }
 
-    let msg = '=================================\\n';
-    msg += '📊 *REKAPITULASI ODP WECARE*\\n';
-    msg += '=================================\\n\\n';
+    let msg = '=================================\n';
+    msg += '📊 REKAPITULASI ODP WECARE\n';
+    msg += '=================================\n\n';
 
     if (Object.keys(openTicketsByTech).length > 0) {
-      msg += '📂 *DAFTAR TIKET STATUS OPEN*\\n';
-      msg += '─────────────────────────\\n';
+      msg += '📂 DAFTAR TIKET STATUS OPEN\n';
+      msg += '─────────────────────────\n';
       for (const [techName, odpList] of Object.entries(openTicketsByTech)) {
         odpList.sort((a, b) => a.odp.localeCompare(b.odp, undefined, { numeric: true, sensitivity: 'base' }));
-        msg += `👤 *${techName}*\\n`;
+        msg += `👤 ${techName}\n`;
         for (let i = 0; i < odpList.length; i++) {
           const isLast = (i === odpList.length - 1);
           const prefix = isLast ? '  └─' : '  ├─';
           const item = odpList[i];
           const accessIdLabel = item.accessId ? ` (${item.accessId})` : '';
-          msg += `${prefix} 📦 *${item.odp}*${accessIdLabel}\\n`;
+          msg += `${prefix} 📦 ${item.odp}${accessIdLabel}\n`;
         }
-        msg += '\\n';
+        msg += '\n';
       }
     }
 
@@ -90,41 +90,50 @@ async function runWecare() {
     const hasOtherAction = Object.keys(otherNeedActionMap).length > 0;
 
     if (hasOpenODP || hasOtherAction) {
-      msg += '═════════════════════════\\n';
-      msg += '⚠️ *DAFTAR ODP NEED ACTION (AFTER)*\\n';
-      msg += '═════════════════════════\\n\\n';
+      msg += '═════════════════════════\n';
+      msg += '⚠️ DAFTAR ODP NEED ACTION (AFTER)\n';
+      msg += '═════════════════════════\n\n';
 
       if (hasOpenODP) {
-        msg += '🔴 *ODP TERBUKA*\\n';
-        msg += '─────────────────────────\\n';
+        msg += '🔴 ODP TERBUKA\n';
+        msg += '─────────────────────────\n';
         for (const [techName, odpList] of Object.entries(openOdpByTech)) {
           odpList.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
-          msg += `👤 *${techName}*\\n`;
+          msg += `👤 ${techName}\n`;
           for (let i = 0; i < odpList.length; i++) {
             const isLast = (i === odpList.length - 1);
             const prefix = isLast ? '  └─' : '  ├─';
-            msg += `${prefix} 📦 *${odpList[i]}*\\n`;
+            msg += `${prefix} 📦 ${odpList[i]}\n`;
           }
-          msg += '\\n';
+          msg += '\n';
         }
       }
 
       if (hasOtherAction) {
-        for (const [kondisiName, odpList] of Object.entries(otherNeedActionMap)) {
+        // Urutkan prioritas: ODP NON COVER duluan, lalu ODP RUSAK, dll
+        const order = ['ODP NON COVER', 'ODP RUSAK'];
+        const sortedKeys = Object.keys(otherNeedActionMap).sort((a, b) => {
+          const idxA = order.indexOf(a) !== -1 ? order.indexOf(a) : 99;
+          const idxB = order.indexOf(b) !== -1 ? order.indexOf(b) : 99;
+          return idxA - idxB || a.localeCompare(b);
+        });
+
+        for (const kondisiName of sortedKeys) {
+          const odpList = otherNeedActionMap[kondisiName];
           odpList.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
-          msg += `🔴 *${kondisiName}*\\n`;
-          msg += '─────────────────────────\\n';
+          msg += `🔴 ${kondisiName}\n`;
+          msg += '─────────────────────────\n';
           for (let i = 0; i < odpList.length; i++) {
             const isLast = (i === odpList.length - 1);
             const prefix = isLast ? '  └─' : '  ├─';
-            msg += `${prefix} 📦 *${odpList[i]}*\\n`;
+            msg += `${prefix} 📦 ${odpList[i]}\n`;
           }
-          msg += '\\n';
+          msg += '\n';
         }
       }
     }
 
-    await sendMessage(broadcastBot, TARGET_CHAT_ID, msg.trimEnd());
+    await sendMessage(broadcastBot, TARGET_CHAT_ID, msg.trimEnd(), { parse_mode: undefined });
   } catch (err) {
     console.error('[Scheduler Error] Wecare:', err.message);
   }
