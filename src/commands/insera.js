@@ -9,11 +9,23 @@ const escapeMarkdown = (text) => {
   return text.toString().replace(/([*_[\]`])/g, '\\$1');
 };
 
-function formatWhatsappNumber(phone) {
-  let clean = String(phone || '').replace(/[^0-9]/g, '');
-  if (clean.startsWith('0')) clean = '62' + clean.slice(1);
-  if (clean.startsWith('8')) clean = '62' + clean;
-  return clean.length >= 9 ? clean : null;
+function extractPhoneNumbers(raw) {
+  if (!raw) return [];
+  const text = String(raw).trim();
+  const matches = text.match(/(?:(?:\+?62)|0)?8[0-9]{8,12}/g);
+  if (!matches) return [];
+
+  const unique = [];
+  for (const m of matches) {
+    let clean = m.replace(/[^0-9]/g, '');
+    if (clean.startsWith('0')) clean = '62' + clean.slice(1);
+    else if (!clean.startsWith('62') && clean.startsWith('8')) clean = '62' + clean;
+
+    if (clean.length >= 10 && clean.length <= 15 && !unique.includes(clean)) {
+      unique.push(clean);
+    }
+  }
+  return unique;
 }
 
 async function handleInseraCommand(ctx, rawTicket) {
@@ -51,7 +63,7 @@ async function handleInseraCommand(ctx, rawTicket) {
     };
 
     const incident = getVal(['INCIDENT', 'Incident']) || searchedTicket;
-    const contactPhone = getVal(['CONTACT PHONE', 'Contact Phone', 'CONTACT_PHONE']) || '-';
+    const rawContactPhone = getVal(['CONTACT PHONE', 'Contact Phone', 'CONTACT_PHONE']) || '-';
     const serviceNo = getVal(['SERVICE NO', 'Service No', 'SERVICE_NO']) || '-';
     const reportedDate = escapeMarkdown(getVal(['REPORTED DATE', 'Reported Date', 'REPORTED_DATE']) || '-');
 
@@ -71,23 +83,30 @@ async function handleInseraCommand(ctx, rawTicket) {
     }
     if (!deviceName) deviceName = '-';
 
+    // Ekstrak dan bersihkan nomor HP (deduplikasi nomor ganda)
+    const phoneList = extractPhoneNumbers(rawContactPhone);
+    const displayPhone = phoneList.length > 0 ? phoneList.join(' / ') : rawContactPhone;
+
     let msg = '📌 *DETAIL TIKET GANGGUAN*\n';
     msg += '━━━━━━━━━━━━━━━━━━\n';
     msg += `🆔 *Incident:* \`${incident}\`\n`;
     msg += `📅 *Reported:* ${reportedDate}\n`;
     msg += `👤 *Customer:* ${contactName}\n`;
     msg += `💎 *Segment:* ${customerType}\n`;
-    msg += `📞 *Contact:* \`${contactPhone}\`\n`;
+    msg += `📞 *Contact:* \`${displayPhone}\`\n`;
     msg += `🌐 *Service No:* \`${serviceNo}\`\n`;
     msg += `🔌 *Device Name:* \`${deviceName}\`\n`;
     msg += '━━━━━━━━━━━━━━━━━━\n';
     msg += '📝 *Summary:*\n';
     msg += summary;
 
-    const waPhone = formatWhatsappNumber(contactPhone);
     const buttons = [];
-    if (waPhone) {
-      buttons.push([Markup.button.url('💬 Chat WhatsApp Pelanggan', `https://wa.me/${waPhone}`)]);
+    if (phoneList.length === 1) {
+      buttons.push([Markup.button.url('💬 Chat WhatsApp Pelanggan', `https://wa.me/${phoneList[0]}`)]);
+    } else if (phoneList.length > 1) {
+      phoneList.forEach((phone, idx) => {
+        buttons.push([Markup.button.url(`💬 Chat WhatsApp (No ${idx + 1}: ${phone})`, `https://wa.me/${phone}`)]);
+      });
     }
 
     if (buttons.length > 0) {

@@ -9,11 +9,23 @@ const escapeMarkdown = (text) => {
   return text.toString().replace(/([*_[\]`])/g, '\\$1');
 };
 
-function formatWhatsappNumber(phone) {
-  let clean = String(phone || '').replace(/[^0-9]/g, '');
-  if (clean.startsWith('0')) clean = '62' + clean.slice(1);
-  if (clean.startsWith('8')) clean = '62' + clean;
-  return clean.length >= 9 ? clean : null;
+function extractPhoneNumbers(raw) {
+  if (!raw) return [];
+  const text = String(raw).trim();
+  const matches = text.match(/(?:(?:\+?62)|0)?8[0-9]{8,12}/g);
+  if (!matches) return [];
+
+  const unique = [];
+  for (const m of matches) {
+    let clean = m.replace(/[^0-9]/g, '');
+    if (clean.startsWith('0')) clean = '62' + clean.slice(1);
+    else if (!clean.startsWith('62') && clean.startsWith('8')) clean = '62' + clean;
+
+    if (clean.length >= 10 && clean.length <= 15 && !unique.includes(clean)) {
+      unique.push(clean);
+    }
+  }
+  return unique;
 }
 
 async function handleBimaCommand(ctx, rawKeyword) {
@@ -51,7 +63,7 @@ async function handleBimaCommand(ctx, rawKeyword) {
     };
 
     const trackOrder = getVal(['track_order', 'track order', 'TRACK ORDER', 'SC Order No/Track ID/CSRM No', 'Workorder', 'WO']) || searchedTicket;
-    const contactNumber = getVal(['Contact Number', 'Contact_Number', 'CONTACT NUMBER', 'contact_number', 'CONTACT PHONE', 'Contact Phone']) || '-';
+    const rawContactNumber = getVal(['Contact Number', 'Contact_Number', 'CONTACT NUMBER', 'contact_number', 'CONTACT PHONE', 'Contact Phone']) || '-';
     const odc = getVal(['ODC', 'odc', 'DEVICE NAME', 'device_name', 'ODP', 'odp']) || '-';
 
     let customerName = getVal(['Customer Name', 'Customer_Name', 'CUSTOMER NAME', 'customer_name']) || '-';
@@ -65,21 +77,28 @@ async function handleBimaCommand(ctx, rawKeyword) {
     const paket = escapeMarkdown(getVal(['PAKET', 'paket', 'Product Name', 'product_name']) || '-');
     const address = escapeMarkdown(getVal(['Address', 'address', 'ADDRESS', 'Service Address', 'Alamat']) || '-');
 
+    // Ekstrak dan bersihkan nomor HP (deduplikasi nomor ganda)
+    const phoneList = extractPhoneNumbers(rawContactNumber);
+    const displayPhone = phoneList.length > 0 ? phoneList.join(' / ') : rawContactNumber;
+
     let msg = '📌 *DETAIL ORDER LAYANAN*\n';
     msg += '━━━━━━━━━━━━━━━━━━\n';
     msg += `🆔 *Track Order:* \`${trackOrder}\`\n`;
     msg += `👤 *Customer Name:* ${customerName}\n`;
-    msg += `📞 *Contact Number:* \`${contactNumber}\`\n`;
+    msg += `📞 *Contact Number:* \`${displayPhone}\`\n`;
     msg += `📦 *Jenis Order:* ${jenisOrder}\n`;
     msg += `🔌 *ODC:* \`${odc}\`\n`;
     msg += `📅 *TGL Manja:* ${tglManja}\n`;
     msg += `🏷️ *Paket:* ${paket}\n`;
     msg += `🏠 *Address:* ${address}`;
 
-    const waPhone = formatWhatsappNumber(contactNumber);
     const buttons = [];
-    if (waPhone) {
-      buttons.push([Markup.button.url('💬 Chat WhatsApp Pelanggan', `https://wa.me/${waPhone}`)]);
+    if (phoneList.length === 1) {
+      buttons.push([Markup.button.url('💬 Chat WhatsApp Pelanggan', `https://wa.me/${phoneList[0]}`)]);
+    } else if (phoneList.length > 1) {
+      phoneList.forEach((phone, idx) => {
+        buttons.push([Markup.button.url(`💬 Chat WhatsApp (No ${idx + 1}: ${phone})`, `https://wa.me/${phone}`)]);
+      });
     }
 
     if (buttons.length > 0) {
