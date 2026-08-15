@@ -75,6 +75,11 @@ console.log(`✅ [Schedulers] All 9 cron jobs registered with timezone: ${TIMEZO
 // 2. SETUP INTERACTIVE BOT COMMANDS
 // -------------------------------------------------------------
 if (interactiveBot) {
+  // Global Telegraf error handler (anti-unhandled drop)
+  interactiveBot.catch((err, ctx) => {
+    console.error(`❌ [Telegraf Error] updateType ${ctx?.updateType}:`, err.message);
+  });
+
   // Daftarkan menu popup command resmi di Telegram
   interactiveBot.telegram.setMyCommands([
     { command: 'mapping', description: '📊 Mapping WO per sektor' },
@@ -168,28 +173,28 @@ if (interactiveBot) {
 
   // Callback Query Handlers (Tombol Sektor)
   interactiveBot.action('map_batulicin', (ctx) => {
-    ctx.answerCbQuery();
+    ctx.answerCbQuery().catch(() => {});
     handleMappingCommand(ctx, 'batulicin');
   });
   interactiveBot.action('map_kotabaru', (ctx) => {
-    ctx.answerCbQuery();
+    ctx.answerCbQuery().catch(() => {});
     handleMappingCommand(ctx, 'kotabaru');
   });
   interactiveBot.action('map_satui', (ctx) => {
-    ctx.answerCbQuery();
+    ctx.answerCbQuery().catch(() => {});
     handleMappingCommand(ctx, 'satui');
   });
 
   interactiveBot.action('tkt_batulicin', (ctx) => {
-    ctx.answerCbQuery();
+    ctx.answerCbQuery().catch(() => {});
     handleTiketCommand(ctx, 'batulicin');
   });
   interactiveBot.action('tkt_kotabaru', (ctx) => {
-    ctx.answerCbQuery();
+    ctx.answerCbQuery().catch(() => {});
     handleTiketCommand(ctx, 'kotabaru');
   });
   interactiveBot.action('tkt_satui', (ctx) => {
-    ctx.answerCbQuery();
+    ctx.answerCbQuery().catch(() => {});
     handleTiketCommand(ctx, 'satui');
   });
 
@@ -213,12 +218,21 @@ if (interactiveBot) {
     return next();
   });
 
-  // Launch Interactive Bot
-  interactiveBot.launch().then(() => {
-    console.log('✅ [Telegram] Interactive Bot listening for commands...');
-  }).catch(err => {
-    console.error('❌ [Telegram Error] Interactive Bot failed to launch:', err.message);
-  });
+  // Robust launch with auto-retry and webhook clearing
+  async function startInteractiveBot() {
+    try {
+      await interactiveBot.telegram.deleteWebhook({ drop_pending_updates: false }).catch(() => {});
+      await interactiveBot.launch({
+        dropPendingUpdates: false
+      });
+      console.log('✅ [Telegram] Interactive Bot listening for commands...');
+    } catch (err) {
+      console.error('❌ [Telegram Error] Interactive Bot launch failed, retrying in 5s:', err.message);
+      setTimeout(startInteractiveBot, 5000);
+    }
+  }
+
+  startInteractiveBot();
 }
 
 // -------------------------------------------------------------
