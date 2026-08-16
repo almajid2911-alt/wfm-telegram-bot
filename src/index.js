@@ -14,6 +14,7 @@ const runUndispatchXpro = require('./schedulers/undispatchXpro');
 const runFfg = require('./schedulers/ffg');
 const runTiketPenting = require('./schedulers/tiketPenting');
 const runPoMaterial = require('./schedulers/poMaterial');
+const runPotensiGaulReminder = require('./schedulers/potensiGaul');
 
 // Interactive Handlers
 const { handleRekonCommand, handleValinsCommand } = require('./commands/rekon');
@@ -46,17 +47,18 @@ process.on('unhandledRejection', (reason) => {
 // -------------------------------------------------------------
 // 1. SETUP CRON SCHEDULERS (BOT BROADCAST)
 // -------------------------------------------------------------
-cron.schedule('35 7-21 * * *',       () => runUndispatchInsera(),  { timezone: TIMEZONE });
-cron.schedule('25 8-10,16-17 * * *', () => runWecare(),            { timezone: TIMEZONE });
-cron.schedule('*/30 8-22 * * *',     () => runPotensiPs(),         { timezone: TIMEZONE });
-cron.schedule('23 9-20 * * *',       () => runRemindFailwa(),      { timezone: TIMEZONE });
-cron.schedule('*/24 8-17 * * *',     () => runUndispatchReminder(),{ timezone: TIMEZONE });
-cron.schedule('6 8-17 * * *',        () => runUndispatchXpro(),    { timezone: TIMEZONE });
-cron.schedule('*/24 8-17 * * *',     () => runFfg(),               { timezone: TIMEZONE });
-cron.schedule('41 8-23 * * *',       () => runTiketPenting(),      { timezone: TIMEZONE });
-cron.schedule('0 8,16 * * *',        () => runPoMaterial(),        { timezone: TIMEZONE });
+cron.schedule('35 7-21 * * *',       () => runUndispatchInsera(),     { timezone: TIMEZONE });
+cron.schedule('25 8-10,16-17 * * *', () => runWecare(),               { timezone: TIMEZONE });
+cron.schedule('*/30 8-22 * * *',     () => runPotensiPs(),            { timezone: TIMEZONE });
+cron.schedule('23 9-20 * * *',       () => runRemindFailwa(),         { timezone: TIMEZONE });
+cron.schedule('*/24 8-17 * * *',     () => runUndispatchReminder(),   { timezone: TIMEZONE });
+cron.schedule('6 8-17 * * *',        () => runUndispatchXpro(),       { timezone: TIMEZONE });
+cron.schedule('*/24 8-17 * * *',     () => runFfg(),                  { timezone: TIMEZONE });
+cron.schedule('41 8-23 * * *',       () => runTiketPenting(),         { timezone: TIMEZONE });
+cron.schedule('0 8,16 * * *',        () => runPoMaterial(),           { timezone: TIMEZONE });
+cron.schedule('19 8,10,12,14,16,18,20 * * *', () => runPotensiGaulReminder(), { timezone: TIMEZONE });
 
-console.log(`✅ [Schedulers] All 9 cron jobs registered (timezone: ${TIMEZONE})`);
+console.log(`✅ [Schedulers] All 10 cron jobs registered (timezone: ${TIMEZONE})`);
 
 // -------------------------------------------------------------
 // 2. SETUP INTERACTIVE BOT COMMAND HANDLERS
