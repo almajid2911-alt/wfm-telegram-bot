@@ -2,7 +2,7 @@ require('dotenv').config();
 const http = require('http');
 const cron = require('node-cron');
 
-const { broadcastBot, interactiveBot, poBot } = require('./config/telegram');
+const { broadcastBot, interactiveBot } = require('./config/telegram');
 
 // Schedulers
 const runUndispatchInsera = require('./schedulers/undispatchInsera');
@@ -28,6 +28,10 @@ console.log('🚀 WFM TELEGRAM BOT ENGINE STARTING...');
 console.log('=============================================');
 
 const TIMEZONE = process.env.TZ || process.env.GENERIC_TIMEZONE || 'Asia/Makassar';
+const WEBHOOK_DOMAIN = process.env.WEBHOOK_DOMAIN || 'wfm-telegram-bot-production.up.railway.app';
+const WEBHOOK_PATH = '/webhook';
+const WEBHOOK_URL = `https://${WEBHOOK_DOMAIN}${WEBHOOK_PATH}`;
+const PORT = process.env.PORT || 3000;
 
 // -------------------------------------------------------------
 // 0. GLOBAL ERROR HANDLER (ANTI-CRASH 24/7)
@@ -35,228 +39,182 @@ const TIMEZONE = process.env.TZ || process.env.GENERIC_TIMEZONE || 'Asia/Makassa
 process.on('uncaughtException', (err) => {
   console.error('🔥 [Uncaught Exception]:', err.message);
 });
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason) => {
   console.error('⚠️ [Unhandled Rejection]:', reason);
 });
 
 // -------------------------------------------------------------
-// 1. HTTP HEALTH CHECK SERVER (FOR RAILWAY WEB PORT)
+// 1. SETUP CRON SCHEDULERS (BOT BROADCAST)
 // -------------------------------------------------------------
-const PORT = process.env.PORT || 3000;
-const server = http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({
-    status: 'ONLINE',
-    service: 'WFM Telegram Automation Service',
-    time: new Date().toISOString(),
-    timezone: TIMEZONE
-  }));
-});
+cron.schedule('35 7-21 * * *',    () => runUndispatchInsera(),  { timezone: TIMEZONE });
+cron.schedule('25 8-10,16-17 * * *', () => runWecare(),         { timezone: TIMEZONE });
+cron.schedule('*/30 8-22 * * *',  () => runPotensiPs(),          { timezone: TIMEZONE });
+cron.schedule('23 9-20 * * *',    () => runRemindFailwa(),       { timezone: TIMEZONE });
+cron.schedule('*/24 8-17 * * *',  () => runUndispatchReminder(), { timezone: TIMEZONE });
+cron.schedule('6 8-17 * * *',     () => runUndispatchXpro(),    { timezone: TIMEZONE });
+cron.schedule('*/24 8-17 * * *',  () => runFfg(),               { timezone: TIMEZONE });
+cron.schedule('41 8-23 * * *',    () => runTiketPenting(),      { timezone: TIMEZONE });
+cron.schedule('0 8,16 * * *',     () => runPoMaterial(),        { timezone: TIMEZONE });
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ [Server] Healthcheck listening on 0.0.0.0:${PORT}`);
-});
+console.log(`✅ [Schedulers] All 9 cron jobs registered (timezone: ${TIMEZONE})`);
 
 // -------------------------------------------------------------
-// 2. SETUP CRON SCHEDULERS (BOT BROADCAST)
-// -------------------------------------------------------------
-// 1. Undispatch Insera: menit 35, jam 07:35 - 21:35 WITA
-cron.schedule('35 7-21 * * *', () => runUndispatchInsera(), { timezone: TIMEZONE });
-
-// 2. Wecare: menit 25, jam 08:25-10:25 & 16:25-17:25 WITA
-cron.schedule('25 8-10,16-17 * * *', () => runWecare(), { timezone: TIMEZONE });
-
-// 3. Potensi PS: tiap 30 menit, jam 08:00 - 22:30 WITA
-cron.schedule('*/30 8-22 * * *', () => runPotensiPs(), { timezone: TIMEZONE });
-
-// 4. Failwa: menit 23, jam 09:23 - 20:23 WITA
-cron.schedule('23 9-20 * * *', () => runRemindFailwa(), { timezone: TIMEZONE });
-
-// 5. Reminder Undispatch: tiap 24 menit, jam 08:00 - 17:00 WITA
-cron.schedule('*/24 8-17 * * *', () => runUndispatchReminder(), { timezone: TIMEZONE });
-
-// 6. Undispatch XPRO: menit 06, jam 08:06 - 17:06 WITA
-cron.schedule('6 8-17 * * *', () => runUndispatchXpro(), { timezone: TIMEZONE });
-
-// 7. FFG: tiap 24 menit, jam 08:00 - 17:00 WITA
-cron.schedule('*/24 8-17 * * *', () => runFfg(), { timezone: TIMEZONE });
-
-// 8. Tiket Penting: menit 41, jam 08:41 - 23:41 WITA
-cron.schedule('41 8-23 * * *', () => runTiketPenting(), { timezone: TIMEZONE });
-
-// 9. PO Material: jam 08:00 dan 16:00 WITA
-cron.schedule('0 8,16 * * *', () => runPoMaterial(), { timezone: TIMEZONE });
-
-console.log(`✅ [Schedulers] All 9 cron jobs registered with timezone: ${TIMEZONE}`);
-
-// -------------------------------------------------------------
-// 3. SETUP INTERACTIVE BOT COMMANDS
+// 2. SETUP INTERACTIVE BOT COMMAND HANDLERS
 // -------------------------------------------------------------
 if (interactiveBot) {
   interactiveBot.catch((err, ctx) => {
     console.error(`❌ [Telegraf Error] updateType ${ctx?.updateType}:`, err.message);
   });
 
-  // Logging setiap pesan masuk
   interactiveBot.use((ctx, next) => {
     const text = ctx.message?.text || ctx.callbackQuery?.data || '';
     const from = ctx.from?.username || ctx.from?.first_name || ctx.from?.id;
-    console.log(`📩 [Telegram Incoming] from ${from}: ${text}`);
+    console.log(`📩 [Incoming] from ${from}: ${text}`);
     return next();
   });
 
-  interactiveBot.start((ctx) => {
-    ctx.reply(
-      `👋 Halo *${ctx.from.first_name || 'Rekan'}*!\n\n` +
-      `Saya adalah Bot Asisten WFM. Berikut perintah yang bisa digunakan:\n\n` +
-      `• \`/mapping <sektor>\` - Mapping WO per sektor\n` +
-      `• \`/tiket <sektor>\` - Monitoring sisa tiket per sektor\n` +
-      `• \`/qc\` - Rekapitulasi QC Reject (NOK)\n` +
-      `• \`/rekon <nama_tim>\` - Cek rekon MTD\n` +
-      `• \`/valins <nama_tim>\` - Cek valins ONT\n` +
-      `• \`/insera <incident>\` - Cari detail tiket Insera (atau langsung ketik \`INC...\`)\n` +
-      `• \`/bima <track_order>\` - Cari detail order BIMA (atau langsung ketik \`AOi...\`)\n`,
-      { parse_mode: 'Markdown' }
-    );
-  });
+  interactiveBot.start((ctx) => ctx.reply(
+    `👋 Halo *${ctx.from.first_name || 'Rekan'}*!\n\n` +
+    `Saya adalah Bot Asisten WFM. Berikut perintah:\n\n` +
+    `• \`/mapping <sektor>\` - Mapping WO per sektor\n` +
+    `• \`/tiket <sektor>\` - Monitoring sisa tiket\n` +
+    `• \`/qc\` - Rekapitulasi QC Reject (NOK)\n` +
+    `• \`/rekon <tim>\` - Cek rekon MTD\n` +
+    `• \`/valins <tim>\` - Cek valins ONT\n` +
+    `• \`/insera <INC>\` - Detail tiket gangguan\n` +
+    `• \`/bima <WO>\` - Detail order BIMA\n`,
+    { parse_mode: 'Markdown' }
+  ));
 
-  interactiveBot.help((ctx) => {
-    ctx.reply(
-      `🤖 *MENU BANTUAN BOT ASISTEN WFM*\n\n` +
-      `📌 *1. MAPPING SEKTOR*\nFormat: \`/mapping <sektor>\`\nContoh: \`/mapping batulicin\`\n\n` +
-      `📌 *2. TIKET SEKTOR*\nFormat: \`/tiket <sektor>\`\nContoh: \`/tiket batulicin\`\n\n` +
-      `📌 *3. REKAP QC REJECT (NOK)*\nFormat: \`/qc\`\n\n` +
-      `📌 *4. DETAIL TIKET INSERA*\nFormat: \`/insera <INC>\` atau langsung ketik nomor \`INC...\`\n\n` +
-      `📌 *5. DETAIL ORDER BIMA*\nFormat: \`/bima <WO>\` atau langsung ketik nomor \`AOi...\`\n\n` +
-      `📌 *6. REKON TIM*\nFormat: \`/rekon <nama_tim>\`\n\n` +
-      `📌 *7. VALINS TIM*\nFormat: \`/valins <nama_tim>\``,
-      { parse_mode: 'Markdown' }
-    );
-  });
+  interactiveBot.help((ctx) => ctx.reply(
+    `🤖 *MENU BANTUAN BOT ASISTEN WFM*\n\n` +
+    `📌 *1. MAPPING SEKTOR*\n\`/mapping batulicin\` | \`/mapping kotabaru\` | \`/mapping satui\`\n\n` +
+    `📌 *2. TIKET SEKTOR*\n\`/tiket batulicin\` | \`/tiket kotabaru\` | \`/tiket satui\`\n\n` +
+    `📌 *3. REKAP QC REJECT*\n\`/qc\`\n\n` +
+    `📌 *4. DETAIL TIKET INSERA*\n\`/insera INC52127760\` atau langsung ketik \`INC...\`\n\n` +
+    `📌 *5. DETAIL ORDER BIMA*\n\`/bima AOi...\` atau langsung ketik \`AOi...\`\n\n` +
+    `📌 *6. REKON TIM*\n\`/rekon BLC|ARIF-006\`\n\n` +
+    `📌 *7. VALINS TIM*\n\`/valins BLC|ARIF-006\``,
+    { parse_mode: 'Markdown' }
+  ));
 
   interactiveBot.command('mapping', (ctx) => {
-    const parts = ctx.message.text.trim().split(/\s+/);
-    const args = parts.slice(1).join(' ').trim();
+    const args = ctx.message.text.trim().split(/\s+/).slice(1).join(' ').trim();
     handleMappingCommand(ctx, args);
   });
-
   interactiveBot.command('tiket', (ctx) => {
-    const parts = ctx.message.text.trim().split(/\s+/);
-    const args = parts.slice(1).join(' ').trim();
+    const args = ctx.message.text.trim().split(/\s+/).slice(1).join(' ').trim();
     handleTiketCommand(ctx, args);
   });
-
-  interactiveBot.command('qc', (ctx) => {
-    handleQcCommand(ctx);
-  });
-
+  interactiveBot.command('qc', (ctx) => handleQcCommand(ctx));
   interactiveBot.command('rekon', (ctx) => {
-    const parts = ctx.message.text.trim().split(/\s+/);
-    const tim = parts.slice(1).join(' ').trim();
-    if (!tim) return ctx.reply('⚠️ Format salah! Gunakan: `/rekon <nama_tim>`\nContoh: `/rekon BLC|ARIF-006`', { parse_mode: 'Markdown' });
+    const tim = ctx.message.text.trim().split(/\s+/).slice(1).join(' ').trim();
+    if (!tim) return ctx.reply('⚠️ Contoh: `/rekon BLC|ARIF-006`', { parse_mode: 'Markdown' });
     handleRekonCommand(ctx, tim);
   });
-
   interactiveBot.command('valins', (ctx) => {
-    const parts = ctx.message.text.trim().split(/\s+/);
-    const tim = parts.slice(1).join(' ').trim();
-    if (!tim) return ctx.reply('⚠️ Format salah! Gunakan: `/valins <nama_tim>`\nContoh: `/valins BLC|ARIF-006`', { parse_mode: 'Markdown' });
+    const tim = ctx.message.text.trim().split(/\s+/).slice(1).join(' ').trim();
+    if (!tim) return ctx.reply('⚠️ Contoh: `/valins BLC|ARIF-006`', { parse_mode: 'Markdown' });
     handleValinsCommand(ctx, tim);
   });
-
   interactiveBot.command('insera', (ctx) => {
-    const parts = ctx.message.text.trim().split(/\s+/);
-    const kw = parts.slice(1).join(' ').trim();
+    const kw = ctx.message.text.trim().split(/\s+/).slice(1).join(' ').trim();
     handleInseraCommand(ctx, kw);
   });
-
   interactiveBot.command('bima', (ctx) => {
-    const parts = ctx.message.text.trim().split(/\s+/);
-    const kw = parts.slice(1).join(' ').trim();
+    const kw = ctx.message.text.trim().split(/\s+/).slice(1).join(' ').trim();
     handleBimaCommand(ctx, kw);
   });
 
-  interactiveBot.action('map_batulicin', (ctx) => {
-    ctx.answerCbQuery().catch(() => {});
-    handleMappingCommand(ctx, 'batulicin');
-  });
-  interactiveBot.action('map_kotabaru', (ctx) => {
-    ctx.answerCbQuery().catch(() => {});
-    handleMappingCommand(ctx, 'kotabaru');
-  });
-  interactiveBot.action('map_satui', (ctx) => {
-    ctx.answerCbQuery().catch(() => {});
-    handleMappingCommand(ctx, 'satui');
-  });
+  // Callback Query (Tombol Sektor)
+  interactiveBot.action('map_batulicin', (ctx) => { ctx.answerCbQuery().catch(() => {}); handleMappingCommand(ctx, 'batulicin'); });
+  interactiveBot.action('map_kotabaru',  (ctx) => { ctx.answerCbQuery().catch(() => {}); handleMappingCommand(ctx, 'kotabaru'); });
+  interactiveBot.action('map_satui',     (ctx) => { ctx.answerCbQuery().catch(() => {}); handleMappingCommand(ctx, 'satui'); });
+  interactiveBot.action('tkt_batulicin', (ctx) => { ctx.answerCbQuery().catch(() => {}); handleTiketCommand(ctx, 'batulicin'); });
+  interactiveBot.action('tkt_kotabaru',  (ctx) => { ctx.answerCbQuery().catch(() => {}); handleTiketCommand(ctx, 'kotabaru'); });
+  interactiveBot.action('tkt_satui',     (ctx) => { ctx.answerCbQuery().catch(() => {}); handleTiketCommand(ctx, 'satui'); });
 
-  interactiveBot.action('tkt_batulicin', (ctx) => {
-    ctx.answerCbQuery().catch(() => {});
-    handleTiketCommand(ctx, 'batulicin');
-  });
-  interactiveBot.action('tkt_kotabaru', (ctx) => {
-    ctx.answerCbQuery().catch(() => {});
-    handleTiketCommand(ctx, 'kotabaru');
-  });
-  interactiveBot.action('tkt_satui', (ctx) => {
-    ctx.answerCbQuery().catch(() => {});
-    handleTiketCommand(ctx, 'satui');
-  });
-
-  // Listener untuk pesan teks langsung (tanpa slash command)
+  // Teks langsung (tanpa slash)
   interactiveBot.on('text', (ctx, next) => {
     const text = (ctx.message.text || '').trim();
     if (text.startsWith('/')) return next();
-
     const incMatch = text.match(/^\s*(INC?\d+)\b/i);
-    if (incMatch) {
-      return handleInseraCommand(ctx, incMatch[1]);
-    }
-
+    if (incMatch) return handleInseraCommand(ctx, incMatch[1]);
     const bimaMatch = text.match(/^\s*(AO\w+|1\d+|TI\w+|SC\w+|MO\w+|PD\w+)\b/i);
-    if (bimaMatch) {
-      return handleBimaCommand(ctx, bimaMatch[1]);
-    }
-
+    if (bimaMatch) return handleBimaCommand(ctx, bimaMatch[1]);
     return next();
   });
-
-  // Auto-Retry Polling Launch Loop (Anti-504 & Anti-502)
-  let retryCount = 0;
-  async function startPollingLoop() {
-    try {
-      console.log('🔄 [Telegram] Attempting to launch Interactive Bot polling...');
-      await interactiveBot.telegram.deleteWebhook({ drop_pending_updates: false }).catch(() => {});
-      
-      // Daftarkan menu popup command resmi
-      interactiveBot.telegram.setMyCommands([
-        { command: 'mapping', description: '📊 Mapping WO per sektor' },
-        { command: 'tiket', description: '🎫 Monitoring sisa tiket per sektor' },
-        { command: 'qc', description: '🚫 Rekapitulasi QC Reject (NOK)' },
-        { command: 'insera', description: '📌 Cari detail tiket gangguan' },
-        { command: 'bima', description: '📦 Cari detail order layanan BIMA' },
-        { command: 'rekon', description: '📋 Cek rekon MTD tim' },
-        { command: 'valins', description: '🔌 Cek valins ONT baru tim' },
-        { command: 'help', description: '🤖 Bantuan daftar perintah' }
-      ]).catch(() => {});
-
-      await interactiveBot.launch({ dropPendingUpdates: false });
-      console.log('✅ [Telegram] Interactive Bot successfully connected & listening for commands!');
-    } catch (err) {
-      retryCount++;
-      console.error(`⚠️ [Telegram Warning] Polling failed (${err.message}). Retrying in 4s (Attempt #${retryCount})...`);
-      setTimeout(startPollingLoop, 4000);
-    }
-  }
-
-  startPollingLoop();
 }
 
+// -------------------------------------------------------------
+// 3. HTTP SERVER — Health Check + Webhook Endpoint
+// -------------------------------------------------------------
+const server = http.createServer(async (req, res) => {
+  // ✅ Webhook endpoint untuk menerima update dari Telegram
+  if (req.method === 'POST' && req.url === WEBHOOK_PATH) {
+    let body = '';
+    req.on('data', (chunk) => { body += chunk.toString(); });
+    req.on('end', async () => {
+      try {
+        const update = JSON.parse(body);
+        if (interactiveBot) {
+          await interactiveBot.handleUpdate(update);
+        }
+        res.writeHead(200);
+        res.end('OK');
+      } catch (err) {
+        console.error('[Webhook Error]', err.message);
+        res.writeHead(200); // tetap 200 agar Telegram tidak retry terus
+        res.end('OK');
+      }
+    });
+    return;
+  }
+
+  // ✅ Health check endpoint
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({
+    status: 'ONLINE',
+    mode: 'WEBHOOK',
+    webhook: WEBHOOK_URL,
+    service: 'WFM Telegram Bot',
+    time: new Date().toISOString(),
+    timezone: TIMEZONE
+  }));
+});
+
+server.listen(PORT, '0.0.0.0', async () => {
+  console.log(`✅ [Server] Listening on 0.0.0.0:${PORT}`);
+
+  // Register webhook ke Telegram setelah server siap
+  if (interactiveBot) {
+    try {
+      await interactiveBot.telegram.setWebhook(WEBHOOK_URL, {
+        allowed_updates: ['message', 'callback_query']
+      });
+      console.log(`✅ [Webhook] Registered: ${WEBHOOK_URL}`);
+
+      const info = await interactiveBot.telegram.getWebhookInfo();
+      console.log(`✅ [Webhook Info] url=${info.url} | pending=${info.pending_update_count}`);
+
+      // Daftarkan menu popup command resmi Telegram
+      await interactiveBot.telegram.setMyCommands([
+        { command: 'mapping', description: '📊 Mapping WO per sektor' },
+        { command: 'tiket',   description: '🎫 Monitoring sisa tiket per sektor' },
+        { command: 'qc',      description: '🚫 Rekapitulasi QC Reject (NOK)' },
+        { command: 'insera',  description: '📌 Cari detail tiket gangguan' },
+        { command: 'bima',    description: '📦 Cari detail order layanan BIMA' },
+        { command: 'rekon',   description: '📋 Cek rekon MTD tim' },
+        { command: 'valins',  description: '🔌 Cek valins ONT baru tim' },
+        { command: 'help',    description: '🤖 Bantuan daftar perintah' }
+      ]);
+      console.log('✅ [Telegram] Bot commands menu registered!');
+    } catch (err) {
+      console.error('❌ [Webhook Error] Failed to set webhook:', err.message);
+    }
+  }
+});
+
 // Graceful shutdown
-process.once('SIGINT', () => {
-  if (interactiveBot) interactiveBot.stop('SIGINT');
-  server.close();
-});
-process.once('SIGTERM', () => {
-  if (interactiveBot) interactiveBot.stop('SIGTERM');
-  server.close();
-});
+process.once('SIGINT',  () => { interactiveBot?.stop('SIGINT');  server.close(); });
+process.once('SIGTERM', () => { interactiveBot?.stop('SIGTERM'); server.close(); });
