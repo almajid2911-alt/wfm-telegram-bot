@@ -2,12 +2,12 @@ const { Telegraf } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
 
-// 1. Bot Broadcast (Laporan / Cron)
-const broadcastToken = process.env.TELEGRAM_BROADCAST_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+// 1. Bot Broadcast (Laporan / Cron) - Default: @Kangbakso1bot
+const broadcastToken = process.env.TELEGRAM_BROADCAST_BOT_TOKEN || '8407209552:AAG06OhudzjkwBgipOp5GErfaCTJWClherg';
 const broadcastBot = broadcastToken ? new Telegraf(broadcastToken) : null;
 
-// 2. Bot Interaktif (Perintah / Command)
-const interactiveToken = process.env.TELEGRAM_INTERACTIVE_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+// 2. Bot Interaktif (Perintah / Command) - Default: @VALINS12BOT (ASISTEN SA BLC)
+const interactiveToken = process.env.TELEGRAM_INTERACTIVE_BOT_TOKEN || '8530881347:AAGRI6ks39n3PFx0r1nV_yWDhKHFo_T8DXE';
 const interactiveBot = interactiveToken ? new Telegraf(interactiveToken) : null;
 
 // 3. Bot PO Material (External / Logistik)
