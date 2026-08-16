@@ -4,9 +4,9 @@ const fs = require('fs');
 
 let sheetsInstance = null;
 
-// In-Memory Smart Cache (TTL 20 Detik)
+// In-Memory Smart Cache (TTL 15 Menit)
 const cache = new Map();
-const CACHE_TTL_MS = 20 * 1000;
+const CACHE_TTL_MS = 15 * 60 * 1000;
 
 async function getSheetsClient() {
   if (sheetsInstance) return sheetsInstance;
