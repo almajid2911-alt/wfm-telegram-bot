@@ -4,7 +4,7 @@ const { getSheetRows } = require('../config/google');
 const SPREADSHEET_ID = process.env.SPREADSHEET_KAWAN_ID || '1gTlZxWfKlCENvDVEDKS_qHrLqNLBXsFsy0utTv2u_hY';
 const SHEET_NAME_GAUL = 'POTENSI GAUL';
 const SHEET_NAME_PANTAU = 'PANTAU TTR';
-const TARGET_CHAT = process.env.CHAT_ID_POTENSI_GAUL || '-4945019710';
+const TARGET_CHATS = (process.env.CHAT_IDS_POTENSI_GAUL || process.env.CHAT_ID_POTENSI_GAUL || '-4945019710,-1004473705354').split(',');
 
 const EMOJI_WZ = {
   BLC: '🟡',
@@ -69,8 +69,8 @@ async function fetchSheetData() {
     const urlPantau = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=422466574`;
 
     const [resG, resP] = await Promise.all([
-      fetch(urlGaul, { headers: { 'User-Agent': 'Mozilla/5.0' } }),
-      fetch(urlPantau, { headers: { 'User-Agent': 'Mozilla/5.0' } })
+      fetch(urlGaul, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }),
+      fetch(urlPantau, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) })
     ]);
 
     if (resG.ok && resP.ok) {
@@ -227,9 +227,18 @@ async function runPotensiGaulReminder() {
 
     const message = lines.join('\n').trim();
 
-    // Send using Kangbakso1bot with sendOrReplaceBroadcast
-    await sendOrReplaceBroadcast(broadcastBot, TARGET_CHAT, 'POTENSI_GAUL', message);
-    console.log(`✅ [Potensi Gaul] Broadcast sent to ${TARGET_CHAT} successfully.`);
+    // Send using Kangbakso1bot with sendOrReplaceBroadcast to all target chats
+    for (const chatId of TARGET_CHATS) {
+      const cleanId = chatId.trim();
+      if (cleanId) {
+        try {
+          await sendOrReplaceBroadcast(broadcastBot, cleanId, 'POTENSI_GAUL', message);
+          console.log(`✅ [Potensi Gaul] Broadcast sent to ${cleanId} successfully.`);
+        } catch (errSend) {
+          console.error(`❌ [Potensi Gaul] Failed to send broadcast to ${cleanId}:`, errSend.message);
+        }
+      }
+    }
   } catch (err) {
     console.error('[Scheduler Error] Potensi Gaul:', err.message);
   }
