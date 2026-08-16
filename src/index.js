@@ -46,15 +46,15 @@ process.on('unhandledRejection', (reason) => {
 // -------------------------------------------------------------
 // 1. SETUP CRON SCHEDULERS (BOT BROADCAST)
 // -------------------------------------------------------------
-cron.schedule('35 7-21 * * *',    () => runUndispatchInsera(),  { timezone: TIMEZONE });
-cron.schedule('25 8-10,16-17 * * *', () => runWecare(),         { timezone: TIMEZONE });
-cron.schedule('*/30 8-22 * * *',  () => runPotensiPs(),          { timezone: TIMEZONE });
-cron.schedule('23 9-20 * * *',    () => runRemindFailwa(),       { timezone: TIMEZONE });
-cron.schedule('*/24 8-17 * * *',  () => runUndispatchReminder(), { timezone: TIMEZONE });
-cron.schedule('6 8-17 * * *',     () => runUndispatchXpro(),    { timezone: TIMEZONE });
-cron.schedule('*/24 8-17 * * *',  () => runFfg(),               { timezone: TIMEZONE });
-cron.schedule('41 8-23 * * *',    () => runTiketPenting(),      { timezone: TIMEZONE });
-cron.schedule('0 8,16 * * *',     () => runPoMaterial(),        { timezone: TIMEZONE });
+cron.schedule('35 7-21 * * *',       () => runUndispatchInsera(),  { timezone: TIMEZONE });
+cron.schedule('25 8-10,16-17 * * *', () => runWecare(),            { timezone: TIMEZONE });
+cron.schedule('*/30 8-22 * * *',     () => runPotensiPs(),         { timezone: TIMEZONE });
+cron.schedule('23 9-20 * * *',       () => runRemindFailwa(),      { timezone: TIMEZONE });
+cron.schedule('*/24 8-17 * * *',     () => runUndispatchReminder(),{ timezone: TIMEZONE });
+cron.schedule('6 8-17 * * *',        () => runUndispatchXpro(),    { timezone: TIMEZONE });
+cron.schedule('*/24 8-17 * * *',     () => runFfg(),               { timezone: TIMEZONE });
+cron.schedule('41 8-23 * * *',       () => runTiketPenting(),      { timezone: TIMEZONE });
+cron.schedule('0 8,16 * * *',        () => runPoMaterial(),        { timezone: TIMEZONE });
 
 console.log(`✅ [Schedulers] All 9 cron jobs registered (timezone: ${TIMEZONE})`);
 
@@ -63,6 +63,12 @@ console.log(`✅ [Schedulers] All 9 cron jobs registered (timezone: ${TIMEZONE})
 // -------------------------------------------------------------
 if (interactiveBot) {
   interactiveBot.catch((err, ctx) => {
+    // Tangani 429 Rate Limit secara khusus
+    if (err.response && err.response.error_code === 429) {
+      const retryAfter = err.response.parameters?.retry_after || 30;
+      console.warn(`⚠️ [Rate Limit] Telegram 429: retry after ${retryAfter}s`);
+      return; // Diam saja, jangan retry agresif
+    }
     console.error(`❌ [Telegraf Error] updateType ${ctx?.updateType}:`, err.message);
   });
 
@@ -106,8 +112,8 @@ if (interactiveBot) {
     const args = ctx.message.text.trim().split(/\s+/).slice(1).join(' ').trim();
     handleTiketCommand(ctx, args);
   });
-  interactiveBot.command('qc', (ctx) => handleQcCommand(ctx));
-  interactiveBot.command('rekon', (ctx) => {
+  interactiveBot.command('qc',     (ctx) => handleQcCommand(ctx));
+  interactiveBot.command('rekon',  (ctx) => {
     const tim = ctx.message.text.trim().split(/\s+/).slice(1).join(' ').trim();
     if (!tim) return ctx.reply('⚠️ Contoh: `/rekon BLC|ARIF-006`', { parse_mode: 'Markdown' });
     handleRekonCommand(ctx, tim);
@@ -150,7 +156,7 @@ if (interactiveBot) {
 // 3. HTTP SERVER — Health Check + Webhook Endpoint
 // -------------------------------------------------------------
 const server = http.createServer(async (req, res) => {
-  // ✅ Webhook endpoint untuk menerima update dari Telegram
+  // ✅ Webhook endpoint — menerima update dari Telegram
   if (req.method === 'POST' && req.url === WEBHOOK_PATH) {
     let body = '';
     req.on('data', (chunk) => { body += chunk.toString(); });
@@ -160,18 +166,16 @@ const server = http.createServer(async (req, res) => {
         if (interactiveBot) {
           await interactiveBot.handleUpdate(update);
         }
-        res.writeHead(200);
-        res.end('OK');
       } catch (err) {
-        console.error('[Webhook Error]', err.message);
-        res.writeHead(200); // tetap 200 agar Telegram tidak retry terus
-        res.end('OK');
+        console.error('[Webhook Parse Error]', err.message);
       }
+      res.writeHead(200);
+      res.end('OK');
     });
     return;
   }
 
-  // ✅ Health check endpoint
+  // ✅ Health check
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({
     status: 'ONLINE',
@@ -185,33 +189,75 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, '0.0.0.0', async () => {
   console.log(`✅ [Server] Listening on 0.0.0.0:${PORT}`);
+  console.log(`✅ [Webhook] Target URL: ${WEBHOOK_URL}`);
 
-  // Register webhook ke Telegram setelah server siap
+  // -------------------------------------------------------------
+  // Register webhook ke Telegram — Exponential Backoff (Anti-Ban)
+  // Max 5 percobaan: tunggu 5s → 10s → 20s → 40s → stop
+  // Tidak pakai infinite retry agar tidak kena flood control
+  // -------------------------------------------------------------
   if (interactiveBot) {
-    try {
-      await interactiveBot.telegram.setWebhook(WEBHOOK_URL, {
-        allowed_updates: ['message', 'callback_query']
-      });
-      console.log(`✅ [Webhook] Registered: ${WEBHOOK_URL}`);
+    const MAX_ATTEMPTS = 5;
+    let attempt = 0;
 
-      const info = await interactiveBot.telegram.getWebhookInfo();
-      console.log(`✅ [Webhook Info] url=${info.url} | pending=${info.pending_update_count}`);
+    async function tryRegisterWebhook() {
+      attempt++;
+      const delay = Math.min(5000 * Math.pow(2, attempt - 1), 60000); // 5s, 10s, 20s, 40s, 60s
 
-      // Daftarkan menu popup command resmi Telegram
-      await interactiveBot.telegram.setMyCommands([
-        { command: 'mapping', description: '📊 Mapping WO per sektor' },
-        { command: 'tiket',   description: '🎫 Monitoring sisa tiket per sektor' },
-        { command: 'qc',      description: '🚫 Rekapitulasi QC Reject (NOK)' },
-        { command: 'insera',  description: '📌 Cari detail tiket gangguan' },
-        { command: 'bima',    description: '📦 Cari detail order layanan BIMA' },
-        { command: 'rekon',   description: '📋 Cek rekon MTD tim' },
-        { command: 'valins',  description: '🔌 Cek valins ONT baru tim' },
-        { command: 'help',    description: '🤖 Bantuan daftar perintah' }
-      ]);
-      console.log('✅ [Telegram] Bot commands menu registered!');
-    } catch (err) {
-      console.error('❌ [Webhook Error] Failed to set webhook:', err.message);
+      try {
+        console.log(`🔄 [Webhook] Attempt ${attempt}/${MAX_ATTEMPTS} - registering webhook...`);
+
+        await interactiveBot.telegram.setWebhook(WEBHOOK_URL, {
+          allowed_updates: ['message', 'callback_query'],
+          drop_pending_updates: true
+        });
+
+        const info = await interactiveBot.telegram.getWebhookInfo();
+        console.log(`✅ [Webhook] Successfully registered!`);
+        console.log(`   URL     : ${info.url}`);
+        console.log(`   Pending : ${info.pending_update_count}`);
+
+        // Daftarkan bot commands menu (hanya sekali setelah webhook berhasil)
+        await interactiveBot.telegram.setMyCommands([
+          { command: 'mapping', description: '📊 Mapping WO per sektor' },
+          { command: 'tiket',   description: '🎫 Monitoring sisa tiket per sektor' },
+          { command: 'qc',      description: '🚫 Rekapitulasi QC Reject (NOK)' },
+          { command: 'insera',  description: '📌 Cari detail tiket gangguan' },
+          { command: 'bima',    description: '📦 Cari detail order layanan BIMA' },
+          { command: 'rekon',   description: '📋 Cek rekon MTD tim' },
+          { command: 'valins',  description: '🔌 Cek valins ONT baru tim' },
+          { command: 'help',    description: '🤖 Bantuan daftar perintah' }
+        ]).catch(() => {});
+        console.log('✅ [Telegram] Bot commands menu registered!');
+
+      } catch (err) {
+        // Handle 429 Rate Limit khusus
+        if (err.response && err.response.error_code === 429) {
+          const retryAfter = (err.response.parameters?.retry_after || 30) * 1000;
+          console.warn(`⚠️ [Webhook] Rate limited (429). Telegram minta tunggu ${retryAfter/1000}s`);
+          if (attempt < MAX_ATTEMPTS) {
+            setTimeout(tryRegisterWebhook, retryAfter + 2000);
+          } else {
+            console.error(`❌ [Webhook] Max attempts reached. Webhook tidak terdaftar otomatis.`);
+            console.error(`   → Jalankan manual: node set_webhook_raw.js`);
+          }
+          return;
+        }
+
+        console.warn(`⚠️ [Webhook] Attempt ${attempt} failed: ${err.message}`);
+
+        if (attempt < MAX_ATTEMPTS) {
+          console.log(`   → Retry dalam ${delay/1000}s...`);
+          setTimeout(tryRegisterWebhook, delay);
+        } else {
+          console.error(`❌ [Webhook] Max ${MAX_ATTEMPTS} attempts reached. Webhook tidak terdaftar otomatis.`);
+          console.error(`   → Jalankan manual dari Railway Console: node set_webhook_raw.js`);
+        }
+      }
     }
+
+    // Mulai dengan delay 3 detik agar server benar-benar siap dulu
+    setTimeout(tryRegisterWebhook, 3000);
   }
 });
 
