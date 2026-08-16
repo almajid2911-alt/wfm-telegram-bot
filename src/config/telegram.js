@@ -15,7 +15,7 @@ const broadcastToken = cleanToken(process.env.TELEGRAM_BROADCAST_BOT_TOKEN) || '
 const broadcastBot = broadcastToken ? new Telegraf(broadcastToken, telegrafConfig) : null;
 
 // 2. Bot Interaktif (Perintah / Command) - Default: @VALINS12BOT (8530881347)
-const interactiveToken = cleanToken(process.env.TELEGRAM_INTERACTIVE_BOT_TOKEN) || cleanToken(process.env.TELEGRAM_BOT_TOKEN) || '8530881347:AAGRI6ks39n3PFx0r1nV_yWDhKHFo_T8DXE';
+const interactiveToken = cleanToken(process.env.TELEGRAM_INTERACTIVE_BOT_TOKEN) || cleanToken(process.env.TELEGRAM_BOT_TOKEN) || '8530881347:AAHipcxNQcd9PSus1PYIJ1i5tuxEROu-2Og';
 const interactiveBot = interactiveToken ? new Telegraf(interactiveToken, telegrafConfig) : null;
 
 // 3. Bot PO Material (External / Logistik)
