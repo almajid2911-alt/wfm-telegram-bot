@@ -75,9 +75,29 @@ console.log(`✅ [Schedulers] All 9 cron jobs registered with timezone: ${TIMEZO
 // 2. SETUP INTERACTIVE BOT COMMANDS
 // -------------------------------------------------------------
 if (interactiveBot) {
-  // Global Telegraf error handler (anti-unhandled drop)
+  // Global Telegraf error handler dengan notifikasi ramah ke user
   interactiveBot.catch((err, ctx) => {
     console.error(`❌ [Telegraf Error] updateType ${ctx?.updateType}:`, err.message);
+    if (ctx && ctx.reply) {
+      ctx.reply('⚠️ *Sistem Sedang Sibuk / Terjadi Gangguan Sementara*\n\nMohon tunggu beberapa detik lalu coba kirimkan kembali.', { parse_mode: 'Markdown' }).catch(() => {});
+    }
+  });
+
+  // Anti-Spam Throttling Middleware (Maks 1 request per 1.5 detik per user)
+  const userLastAction = new Map();
+  interactiveBot.use(async (ctx, next) => {
+    if (!ctx.from || !ctx.from.id) return next();
+    const userId = ctx.from.id;
+    const now = Date.now();
+    const lastTime = userLastAction.get(userId) || 0;
+
+    if (now - lastTime < 1500) {
+      userLastAction.set(userId, now);
+      return; // Abaikan spam cepat bertubi-tubi
+    }
+
+    userLastAction.set(userId, now);
+    return next();
   });
 
   // Daftarkan menu popup command resmi di Telegram
