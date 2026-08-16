@@ -1,10 +1,12 @@
 require('dotenv').config();
-const { broadcastBot, BROADCAST_CHAT_ID } = require('./src/config/telegram');
+const { broadcastBot, sendOrReplaceBroadcast } = require('./src/config/telegram');
 const runPotensiPs = require('./src/schedulers/potensiPs');
+
+const TARGET_CHAT = process.env.CHAT_IDS_POTENSI || '-1002616721208';
 
 async function testBroadcast() {
   console.log('--- TESTING BOT BROADCAST ---');
-  console.log('Target Chat ID:', BROADCAST_CHAT_ID);
+  console.log('Target Chat ID:', TARGET_CHAT);
   
   if (!broadcastBot) {
     console.error('❌ Broadcast Bot tidak terinisialisasi!');
@@ -14,16 +16,15 @@ async function testBroadcast() {
   try {
     console.log('1. Mengirim pesan ping test broadcast...');
     const res = await broadcastBot.telegram.sendMessage(
-      BROADCAST_CHAT_ID,
-      '🧪 *TEST KONEKSI BOT BROADCAST*\n\n' +
-      'Status: *ONLINE & STABIL*\n' +
+      TARGET_CHAT,
+      '🧪 TEST KONEKSI BOT BROADCAST\n\n' +
+      'Status: ONLINE & NORMAL\n' +
       `Waktu: ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Makassar' })} WITA\n\n` +
-      'Semua scheduler berjalan normal di background Railway! 🚀',
-      { parse_mode: 'Markdown' }
+      'Bot Broadcast (@Kangbakso1bot) aktif dan siap menjalankan semua jadwal otomatis! 🚀'
     );
     console.log('✅ Pesan ping terkirim! Message ID:', res.message_id);
 
-    console.log('2. Mencoba trigger salah satu scheduler (Potensi PS)...');
+    console.log('2. Mencoba trigger scheduler (Potensi PS)...');
     await runPotensiPs();
     console.log('✅ Scheduler Potensi PS selesai dieksekusi!');
     
