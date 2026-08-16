@@ -40,7 +40,7 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // -------------------------------------------------------------
-// 1. HTTP HEALTH CHECK SERVER (FIRST PRIORITY FOR RAILWAY)
+// 1. HTTP HEALTH CHECK SERVER (FOR RAILWAY WEB PORT)
 // -------------------------------------------------------------
 const PORT = process.env.PORT || 3000;
 const server = http.createServer((req, res) => {
@@ -93,7 +93,6 @@ console.log(`✅ [Schedulers] All 9 cron jobs registered with timezone: ${TIMEZO
 // 3. SETUP INTERACTIVE BOT COMMANDS
 // -------------------------------------------------------------
 if (interactiveBot) {
-  // Global Telegraf error handler
   interactiveBot.catch((err, ctx) => {
     console.error(`❌ [Telegraf Error] updateType ${ctx?.updateType}:`, err.message);
   });
@@ -105,18 +104,6 @@ if (interactiveBot) {
     console.log(`📩 [Telegram Incoming] from ${from}: ${text}`);
     return next();
   });
-
-  // Menu popup resmi Telegram
-  interactiveBot.telegram.setMyCommands([
-    { command: 'mapping', description: '📊 Mapping WO per sektor' },
-    { command: 'tiket', description: '🎫 Monitoring sisa tiket per sektor' },
-    { command: 'qc', description: '🚫 Rekapitulasi QC Reject (NOK)' },
-    { command: 'insera', description: '📌 Cari detail tiket gangguan' },
-    { command: 'bima', description: '📦 Cari detail order layanan BIMA' },
-    { command: 'rekon', description: '📋 Cek rekon MTD tim' },
-    { command: 'valins', description: '🔌 Cek valins ONT baru tim' },
-    { command: 'help', description: '🤖 Bantuan daftar perintah' }
-  ]).catch(err => console.error('Failed to set my commands:', err.message));
 
   interactiveBot.start((ctx) => {
     ctx.reply(
@@ -233,14 +220,35 @@ if (interactiveBot) {
     return next();
   });
 
-  // Clear webhook & Launch Polling
-  interactiveBot.telegram.deleteWebhook({ drop_pending_updates: false })
-    .catch(() => {})
-    .finally(() => {
-      interactiveBot.launch({ dropPendingUpdates: false })
-        .then(() => console.log('✅ [Telegram] Interactive Bot listening for commands...'))
-        .catch(err => console.error('❌ [Telegram Error] Interactive Bot failed to launch:', err.message));
-    });
+  // Auto-Retry Polling Launch Loop (Anti-504 & Anti-502)
+  let retryCount = 0;
+  async function startPollingLoop() {
+    try {
+      console.log('🔄 [Telegram] Attempting to launch Interactive Bot polling...');
+      await interactiveBot.telegram.deleteWebhook({ drop_pending_updates: false }).catch(() => {});
+      
+      // Daftarkan menu popup command resmi
+      interactiveBot.telegram.setMyCommands([
+        { command: 'mapping', description: '📊 Mapping WO per sektor' },
+        { command: 'tiket', description: '🎫 Monitoring sisa tiket per sektor' },
+        { command: 'qc', description: '🚫 Rekapitulasi QC Reject (NOK)' },
+        { command: 'insera', description: '📌 Cari detail tiket gangguan' },
+        { command: 'bima', description: '📦 Cari detail order layanan BIMA' },
+        { command: 'rekon', description: '📋 Cek rekon MTD tim' },
+        { command: 'valins', description: '🔌 Cek valins ONT baru tim' },
+        { command: 'help', description: '🤖 Bantuan daftar perintah' }
+      ]).catch(() => {});
+
+      await interactiveBot.launch({ dropPendingUpdates: false });
+      console.log('✅ [Telegram] Interactive Bot successfully connected & listening for commands!');
+    } catch (err) {
+      retryCount++;
+      console.error(`⚠️ [Telegram Warning] Polling failed (${err.message}). Retrying in 4s (Attempt #${retryCount})...`);
+      setTimeout(startPollingLoop, 4000);
+    }
+  }
+
+  startPollingLoop();
 }
 
 // Graceful shutdown

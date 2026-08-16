@@ -4,20 +4,26 @@ const path = require('path');
 
 const cleanToken = (t) => (t ? String(t).trim().replace(/['"]/g, '') : null);
 
+const telegrafConfig = {
+  telegram: {
+    timeout: 60000 // 60 detik timeout untuk koneksi stabil
+  }
+};
+
 // 1. Bot Broadcast (Laporan / Cron) - Default: @Kangbakso1bot (8407209552)
 const broadcastToken = cleanToken(process.env.TELEGRAM_BROADCAST_BOT_TOKEN) || '8407209552:AAG06OhudzjkwBgipOp5GErfaCTJWClherg';
-const broadcastBot = broadcastToken ? new Telegraf(broadcastToken) : null;
+const broadcastBot = broadcastToken ? new Telegraf(broadcastToken, telegrafConfig) : null;
 
 // 2. Bot Interaktif (Perintah / Command) - Default: @VALINS12BOT (8530881347)
 const interactiveToken = cleanToken(process.env.TELEGRAM_INTERACTIVE_BOT_TOKEN) || cleanToken(process.env.TELEGRAM_BOT_TOKEN) || '8530881347:AAGRI6ks39n3PFx0r1nV_yWDhKHFo_T8DXE';
-const interactiveBot = interactiveToken ? new Telegraf(interactiveToken) : null;
+const interactiveBot = interactiveToken ? new Telegraf(interactiveToken, telegrafConfig) : null;
 
 // 3. Bot PO Material (External / Logistik)
 const poToken = cleanToken(process.env.TELEGRAM_PO_BOT_TOKEN) || broadcastToken;
-const poBot = poToken ? new Telegraf(poToken) : null;
+const poBot = poToken ? new Telegraf(poToken, telegrafConfig) : null;
 
-console.log(`[Config] Broadcast Bot Token: ${broadcastToken.slice(0, 10)}...`);
-console.log(`[Config] Interactive Bot Token: ${interactiveToken.slice(0, 10)}...`);
+console.log(`[Config] Broadcast Bot Token: ${broadcastToken ? broadcastToken.slice(0, 10) + '...' : 'NONE'}`);
+console.log(`[Config] Interactive Bot Token: ${interactiveToken ? interactiveToken.slice(0, 10) + '...' : 'NONE'}`);
 
 // Tracker Pesan Terakhir (Auto-Delete Old Message)
 const TRACKER_FILE = path.resolve(process.cwd(), 'data/last_messages.json');
