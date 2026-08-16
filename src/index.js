@@ -40,7 +40,25 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // -------------------------------------------------------------
-// 1. SETUP CRON SCHEDULERS (BOT BROADCAST SESUAI JADWAL N8N)
+// 1. HTTP HEALTH CHECK SERVER (FIRST PRIORITY FOR RAILWAY)
+// -------------------------------------------------------------
+const PORT = process.env.PORT || 3000;
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({
+    status: 'ONLINE',
+    service: 'WFM Telegram Automation Service',
+    time: new Date().toISOString(),
+    timezone: TIMEZONE
+  }));
+});
+
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ [Server] Healthcheck listening on 0.0.0.0:${PORT}`);
+});
+
+// -------------------------------------------------------------
+// 2. SETUP CRON SCHEDULERS (BOT BROADCAST)
 // -------------------------------------------------------------
 // 1. Undispatch Insera: menit 35, jam 07:35 - 21:35 WITA
 cron.schedule('35 7-21 * * *', () => runUndispatchInsera(), { timezone: TIMEZONE });
@@ -72,35 +90,23 @@ cron.schedule('0 8,16 * * *', () => runPoMaterial(), { timezone: TIMEZONE });
 console.log(`✅ [Schedulers] All 9 cron jobs registered with timezone: ${TIMEZONE}`);
 
 // -------------------------------------------------------------
-// 2. SETUP INTERACTIVE BOT COMMANDS
+// 3. SETUP INTERACTIVE BOT COMMANDS
 // -------------------------------------------------------------
 if (interactiveBot) {
-  // Global Telegraf error handler dengan notifikasi ramah ke user
+  // Global Telegraf error handler
   interactiveBot.catch((err, ctx) => {
     console.error(`❌ [Telegraf Error] updateType ${ctx?.updateType}:`, err.message);
-    if (ctx && ctx.reply) {
-      ctx.reply('⚠️ *Sistem Sedang Sibuk / Terjadi Gangguan Sementara*\n\nMohon tunggu beberapa detik lalu coba kirimkan kembali.', { parse_mode: 'Markdown' }).catch(() => {});
-    }
   });
 
-  // Anti-Spam Throttling Middleware (Maks 1 request per 1.5 detik per user)
-  const userLastAction = new Map();
-  interactiveBot.use(async (ctx, next) => {
-    if (!ctx.from || !ctx.from.id) return next();
-    const userId = ctx.from.id;
-    const now = Date.now();
-    const lastTime = userLastAction.get(userId) || 0;
-
-    if (now - lastTime < 1500) {
-      userLastAction.set(userId, now);
-      return; // Abaikan spam cepat bertubi-tubi
-    }
-
-    userLastAction.set(userId, now);
+  // Logging setiap pesan masuk
+  interactiveBot.use((ctx, next) => {
+    const text = ctx.message?.text || ctx.callbackQuery?.data || '';
+    const from = ctx.from?.username || ctx.from?.first_name || ctx.from?.id;
+    console.log(`📩 [Telegram Incoming] from ${from}: ${text}`);
     return next();
   });
 
-  // Daftarkan menu popup command resmi di Telegram
+  // Menu popup resmi Telegram
   interactiveBot.telegram.setMyCommands([
     { command: 'mapping', description: '📊 Mapping WO per sektor' },
     { command: 'tiket', description: '🎫 Monitoring sisa tiket per sektor' },
@@ -127,7 +133,6 @@ if (interactiveBot) {
     );
   });
 
-  // /help
   interactiveBot.help((ctx) => {
     ctx.reply(
       `🤖 *MENU BANTUAN BOT ASISTEN WFM*\n\n` +
@@ -142,26 +147,22 @@ if (interactiveBot) {
     );
   });
 
-  // /mapping <sektor>
   interactiveBot.command('mapping', (ctx) => {
     const parts = ctx.message.text.trim().split(/\s+/);
     const args = parts.slice(1).join(' ').trim();
     handleMappingCommand(ctx, args);
   });
 
-  // /tiket <sektor>
   interactiveBot.command('tiket', (ctx) => {
     const parts = ctx.message.text.trim().split(/\s+/);
     const args = parts.slice(1).join(' ').trim();
     handleTiketCommand(ctx, args);
   });
 
-  // /qc
   interactiveBot.command('qc', (ctx) => {
     handleQcCommand(ctx);
   });
 
-  // /rekon <tim>
   interactiveBot.command('rekon', (ctx) => {
     const parts = ctx.message.text.trim().split(/\s+/);
     const tim = parts.slice(1).join(' ').trim();
@@ -169,7 +170,6 @@ if (interactiveBot) {
     handleRekonCommand(ctx, tim);
   });
 
-  // /valins <tim>
   interactiveBot.command('valins', (ctx) => {
     const parts = ctx.message.text.trim().split(/\s+/);
     const tim = parts.slice(1).join(' ').trim();
@@ -177,21 +177,18 @@ if (interactiveBot) {
     handleValinsCommand(ctx, tim);
   });
 
-  // /insera <keyword>
   interactiveBot.command('insera', (ctx) => {
     const parts = ctx.message.text.trim().split(/\s+/);
     const kw = parts.slice(1).join(' ').trim();
     handleInseraCommand(ctx, kw);
   });
 
-  // /bima <keyword>
   interactiveBot.command('bima', (ctx) => {
     const parts = ctx.message.text.trim().split(/\s+/);
     const kw = parts.slice(1).join(' ').trim();
     handleBimaCommand(ctx, kw);
   });
 
-  // Callback Query Handlers (Tombol Sektor)
   interactiveBot.action('map_batulicin', (ctx) => {
     ctx.answerCbQuery().catch(() => {});
     handleMappingCommand(ctx, 'batulicin');
@@ -223,13 +220,11 @@ if (interactiveBot) {
     const text = (ctx.message.text || '').trim();
     if (text.startsWith('/')) return next();
 
-    // 1. Cek pola Insera (INC49943649, IN49943649, inc...)
     const incMatch = text.match(/^\s*(INC?\d+)\b/i);
     if (incMatch) {
       return handleInseraCommand(ctx, incMatch[1]);
     }
 
-    // 2. Cek pola Bima (AOi..., 1..., TI..., SC..., MO..., PD...)
     const bimaMatch = text.match(/^\s*(AO\w+|1\d+|TI\w+|SC\w+|MO\w+|PD\w+)\b/i);
     if (bimaMatch) {
       return handleBimaCommand(ctx, bimaMatch[1]);
@@ -238,40 +233,15 @@ if (interactiveBot) {
     return next();
   });
 
-  // Robust launch with auto-retry and webhook clearing
-  async function startInteractiveBot() {
-    try {
-      await interactiveBot.telegram.deleteWebhook({ drop_pending_updates: false }).catch(() => {});
-      await interactiveBot.launch({
-        dropPendingUpdates: false
-      });
-      console.log('✅ [Telegram] Interactive Bot listening for commands...');
-    } catch (err) {
-      console.error('❌ [Telegram Error] Interactive Bot launch failed, retrying in 5s:', err.message);
-      setTimeout(startInteractiveBot, 5000);
-    }
-  }
-
-  startInteractiveBot();
+  // Clear webhook & Launch Polling
+  interactiveBot.telegram.deleteWebhook({ drop_pending_updates: false })
+    .catch(() => {})
+    .finally(() => {
+      interactiveBot.launch({ dropPendingUpdates: false })
+        .then(() => console.log('✅ [Telegram] Interactive Bot listening for commands...'))
+        .catch(err => console.error('❌ [Telegram Error] Interactive Bot failed to launch:', err.message));
+    });
 }
-
-// -------------------------------------------------------------
-// 3. HTTP HEALTH CHECK SERVER (FOR RAILWAY WEB PORT)
-// -------------------------------------------------------------
-const PORT = process.env.PORT || 3000;
-const server = http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({
-    status: 'ONLINE',
-    service: 'WFM Telegram Automation Service',
-    time: new Date().toISOString(),
-    timezone: TIMEZONE
-  }));
-});
-
-server.listen(PORT, () => {
-  console.log(`✅ [Server] Healthcheck listening on port ${PORT}`);
-});
 
 // Graceful shutdown
 process.once('SIGINT', () => {
