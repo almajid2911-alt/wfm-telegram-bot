@@ -5,10 +5,16 @@ const SPREADSHEET_ID = process.env.SPREADSHEET_KAWAN_ID || '1gTlZxWfKlCENvDVEDKS
 const SHEET_NAME = 'KAWAL KETAT';
 const TARGET_CHAT_ID = process.env.CHAT_ID_TIKET_PENTING || '-4945019710';
 
+function simplifyODC(raw) {
+  if (!raw) return '-';
+  const s = String(raw).replace(/^(ODC-|ODP-)/i, '').split('/')[0].split(' ')[0].trim();
+  return s || '-';
+}
+
 async function runTiketPenting() {
   console.log('[Scheduler] Running Tiket Penting...');
   try {
-    const rows = await getSheetRows(SPREADSHEET_ID, SHEET_NAME);
+    const rows = await getSheetRows(SPREADSHEET_ID, SHEET_NAME, true);
     if (!rows.length) return;
 
     let garansi = [];
@@ -16,33 +22,36 @@ async function runTiketPenting() {
     let diamond = [];
 
     for (const row of rows) {
-      const incident = row['INCIDENT'] || '-';
-      const customerType = String(row['CUSTOMER TYPE'] || '').trim().toUpperCase();
-      const guaranteeStatus = String(row['STATUS GARANSI'] || '').trim().toUpperCase();
-      const timInsera = row['TIM INSERA'] || '-';
+      const incident = (row['INCIDENT'] || row['incident'] || '-').trim();
+      const customerType = String(row['CUSTOMER TYPE'] || row['customer_type'] || '').trim().toUpperCase();
+      const guaranteeStatus = String(row['STATUS GARANSI'] || row['status_garansi'] || row['GUARANTE STATUS'] || '').trim().toUpperCase();
+      const timInsera = (row['TIM INSERA'] || row['tim_insera'] || row['TIM'] || row['tim'] || '-').trim();
+      const summaryRaw = String(row['SUMMARY'] || row['summary'] || '').trim().toUpperCase();
 
-      const summaryRaw = String(row['SUMMARY'] || '').trim().toUpperCase();
-      let tag = '';
-      if (summaryRaw.includes('UNSPEC')) tag = ' | UNSPEC';
-      else if (summaryRaw.includes('SQM')) tag = ' | SQM';
-
-      let odcFormatted = '-';
-      const odcRaw = row['ODC REAL'] || '';
-      if (typeof odcRaw === 'string' && odcRaw.includes('-')) {
-        const parts = odcRaw.split('-');
-        if (parts.length >= 3) {
-          odcFormatted = `${parts[1]}-${parts[2]}`;
-        }
+      // Exclude SQM, UNSPEC, and GAMAS (Only regular non-SQM / non-UNSPEC)
+      if (
+        summaryRaw.includes('SQM') ||
+        summaryRaw.includes('UNSPEC') ||
+        summaryRaw.includes('UNSPEK') ||
+        summaryRaw.includes('GAMAS') ||
+        customerType.includes('SQM') ||
+        customerType.includes('UNSPEC') ||
+        customerType.includes('UNSPEK') ||
+        customerType.includes('GAMAS')
+      ) {
+        continue;
       }
 
-      let ttrValue = parseFloat(row['TTR']);
+      const odcFormatted = simplifyODC(row['ODC REAL'] || row['odc_real'] || row['DEVICE NAME'] || row['device_name']);
+
+      let ttrValue = parseFloat(String(row['TTR'] || row['ttr'] || '').replace(',', '.'));
       if (isNaN(ttrValue)) continue;
       if (ttrValue < 0) ttrValue = 0;
 
       const duration = ttrValue.toFixed(2).replace('.', ',');
-      const line = `TIM ${timInsera}\n${incident}|${odcFormatted}|${duration}${tag}`;
+      const line = `TIM ${timInsera}\n${incident} | ${odcFormatted} | ${duration}`;
 
-      if (guaranteeStatus === 'GARANSI') {
+      if (guaranteeStatus === 'GARANSI' || guaranteeStatus === 'YES' || guaranteeStatus === 'TRUE') {
         const emoji = ttrValue > 3 ? '🔴' : '🟢';
         garansi.push(`${line} ${emoji}`);
       } else if (customerType.includes('PLATINUM')) {
@@ -54,7 +63,10 @@ async function runTiketPenting() {
       }
     }
 
-    if (!garansi.length && !platinum.length && !diamond.length) return;
+    if (!garansi.length && !platinum.length && !diamond.length) {
+      console.log('[Tiket Penting] No non-SQM/non-UNSPEC HVC/Garansi tickets found.');
+      return;
+    }
 
     const sections = [];
     if (garansi.length) {
