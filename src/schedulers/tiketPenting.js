@@ -28,16 +28,14 @@ async function runTiketPenting() {
       const timInsera = (row['TIM INSERA'] || row['tim_insera'] || row['TIM'] || row['tim'] || '-').trim();
       const summaryRaw = String(row['SUMMARY'] || row['summary'] || '').trim().toUpperCase();
 
-      // Exclude SQM, UNSPEC, and GAMAS (Only regular non-SQM / non-UNSPEC)
+      // Exclude SQM and UNSPEC only (GAMAS tetap masuk jika Platinum, Diamond, atau Garansi)
       if (
         summaryRaw.includes('SQM') ||
         summaryRaw.includes('UNSPEC') ||
         summaryRaw.includes('UNSPEK') ||
-        summaryRaw.includes('GAMAS') ||
         customerType.includes('SQM') ||
         customerType.includes('UNSPEC') ||
-        customerType.includes('UNSPEK') ||
-        customerType.includes('GAMAS')
+        customerType.includes('UNSPEK')
       ) {
         continue;
       }
