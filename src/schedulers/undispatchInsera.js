@@ -3,7 +3,8 @@ const { broadcastBot, sendOrReplaceBroadcast } = require('../config/telegram');
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_KAWAN_ID || '1gTlZxWfKlCENvDVEDKS_qHrLqNLBXsFsy0utTv2u_hY';
 const SHEET_NAME = 'PANTAU TTR';
-const TARGET_CHATS = (process.env.CHAT_IDS_UNDISPATCH_INSERA || process.env.CHAT_ID_UNDISPATCH_INSERA || '-4945019710,-1004473705354,-1003190090092').split(',');
+// Exclude -4945019710 as requested
+const TARGET_CHATS = (process.env.CHAT_IDS_UNDISPATCH_INSERA || process.env.CHAT_ID_UNDISPATCH_INSERA || '-1004473705354,-1003190090092').split(',');
 
 function parseCSV(csvText) {
   const lines = csvText.split(/\r?\n/).filter(line => line.trim().length > 0);
@@ -60,20 +61,12 @@ const upper = v => norm(v).toUpperCase();
 function classifyTicket(r) {
   const summary = upper(r.SUMMARY || r.summary);
   const custType = upper(r['CUSTOMER TYPE'] || r.customer_type);
-  const custSeg = upper(r['CUSTOMER SEGMENT'] || r.customer_segment);
-  const statusGaransi = upper(r['STATUS GARANSI'] || r.status_garansi);
-  const guarStatus = upper(r['GUARANTE STATUS'] || r.guarante_status);
 
   if (summary.includes('GAMAS')) return 'GAMAS';
-  if (custSeg === 'RBS' || summary.includes('RBS') || custType.includes('RBS')) return 'RBS';
   if (summary.includes('SQM') || custType.includes('SQM')) return 'SQM';
   if (summary.includes('UNSPEC') || summary.includes('UNSPEK') || custType.includes('UNSPEC')) return 'UNSPEC';
-  if (statusGaransi.includes('GARANSI') || (guarStatus.includes('GARANSI') && !guarStatus.includes('NOT') && !guarStatus.includes('NON'))) {
-    return 'GARANSI';
-  }
-  if (custType.includes('GOLD')) return 'HVC GOLD';
-  if (custType.includes('PLATINUM')) return 'HVC PLATINUM';
-  if (custType.includes('DIAMOND')) return 'HVC DIAMOND';
+  
+  // All others (HVC GOLD, HVC Platinum, HVC Diamond, RBS, Garansi, Reguler) fall under REGULER
   return 'REGULER';
 }
 
@@ -84,8 +77,12 @@ const formatTTR = v => {
   return { text: num.toFixed(1).replace('.', ','), value: num };
 };
 
-const simplifyODC = val => {
-  return norm(val).replace(/^(ODC-|ODP-)/i, '').split(' ')[0];
+const simplifyODC = (odcReal, deviceName) => {
+  let s = norm(odcReal);
+  if (!s || s === '-' || s === '`' || s.toLowerCase() === 'none') {
+    s = norm(deviceName);
+  }
+  return s.replace(/^(ODC-|ODP-)/i, '').split('/')[0].split(' ')[0].trim() || '-';
 };
 
 const sektorMap = {
@@ -96,20 +93,6 @@ const sektorMap = {
   'PGT': 'SEKTOR SATUI',
   'KIP': 'SEKTOR SATUI'
 };
-
-const categoryEmoji = {
-  'GAMAS': '🚨 GAMAS',
-  'SQM': '⚡ SQM',
-  'UNSPEC': '❓ UNSPEC',
-  'HVC GOLD': '🥇 HVC GOLD',
-  'HVC PLATINUM': '💎 HVC PLATINUM',
-  'HVC DIAMOND': '💠 HVC DIAMOND',
-  'GARANSI': '🛡️ GARANSI',
-  'RBS': '🏢 RBS',
-  'REGULER': '👤 REGULER'
-};
-
-const categoryOrder = ['GAMAS', 'SQM', 'UNSPEC', 'HVC DIAMOND', 'HVC PLATINUM', 'HVC GOLD', 'GARANSI', 'RBS', 'REGULER'];
 
 async function runUndispatchInsera() {
   console.log('[Scheduler] Running Undispatch Insera...');
@@ -142,15 +125,14 @@ async function runUndispatchInsera() {
       const cat = classifyTicket(r);
 
       if (!grouped[sektor]) {
-        grouped[sektor] = {};
+        grouped[sektor] = { REGULER: [], SQM: [], UNSPEC: [], GAMAS: [] };
       }
       if (!grouped[sektor][cat]) {
         grouped[sektor][cat] = [];
       }
 
       const ttr = formatTTR(r.TTR || r.ttr);
-      const rawOdc = norm(r['ODC REAL'] || r['DEVICE NAME'] || r.odc_real || '');
-      const odc = simplifyODC(rawOdc);
+      const odc = simplifyODC(r['ODC REAL'] || r.odc_real, r['DEVICE NAME'] || r.device_name);
       const fire = ttr.value > 12 ? '🔥 ' : '';
 
       grouped[sektor][cat].push({
@@ -163,15 +145,49 @@ async function runUndispatchInsera() {
     Object.keys(grouped).sort().forEach(sektor => {
       output += `📍 ${sektor}\n`;
       
-      for (const cat of categoryOrder) {
-        if (grouped[sektor][cat] && grouped[sektor][cat].length) {
-          const header = categoryEmoji[cat] || cat;
-          output += `\n${header}\n`;
-          grouped[sektor][cat].sort((a, b) => a.odc.localeCompare(b.odc)).forEach(i => {
-            output += i.line + '\n';
-          });
-        }
+      const data = grouped[sektor];
+      const hasReguler = data.REGULER && data.REGULER.length > 0;
+      const hasSqm = data.SQM && data.SQM.length > 0;
+      const hasUnspec = data.UNSPEC && data.UNSPEC.length > 0;
+      const hasGamas = data.GAMAS && data.GAMAS.length > 0;
+
+      // 1. REGULER on top (HVC Gold, Diamond, Platinum, RBS, Reguler)
+      if (hasReguler) {
+        output += '\n👤 REGULER\n';
+        data.REGULER.sort((a, b) => a.odc.localeCompare(b.odc)).forEach(i => {
+          output += i.line + '\n';
+        });
       }
+
+      // Divider if REGULER exists and there are SQM/UNSPEC/GAMAS below
+      if (hasReguler && (hasSqm || hasUnspec || hasGamas)) {
+        output += '\n━━━━━━━━━━━━━━━━━━━━━\n';
+      }
+
+      // 2. SQM
+      if (hasSqm) {
+        output += '\n⚡ SQM\n';
+        data.SQM.sort((a, b) => a.odc.localeCompare(b.odc)).forEach(i => {
+          output += i.line + '\n';
+        });
+      }
+
+      // 3. UNSPEC
+      if (hasUnspec) {
+        output += '\n❓ UNSPEC\n';
+        data.UNSPEC.sort((a, b) => a.odc.localeCompare(b.odc)).forEach(i => {
+          output += i.line + '\n';
+        });
+      }
+
+      // 4. GAMAS
+      if (hasGamas) {
+        output += '\n🚨 GAMAS\n';
+        data.GAMAS.sort((a, b) => a.odc.localeCompare(b.odc)).forEach(i => {
+          output += i.line + '\n';
+        });
+      }
+
       output += '\n';
     });
 
