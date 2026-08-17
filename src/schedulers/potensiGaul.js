@@ -111,64 +111,62 @@ async function runPotensiGaulReminder() {
       }
     }
 
-    // Filter rows that have an actual ticket incident or valid potensi gaul
-    const ticketItems = [];
-    const gponItems = [];
+    const groupedByTeam = {};
 
     for (const row of gaulRows) {
       const inc = norm(row['INCIDENT'] || row['incident']).toUpperCase();
       const serviceNo = norm(row['SERVICE NO'] || row['service_no'] || row['Service No']);
-      const deviceName = norm(row['DEVICE NAME'] || row['device_name'] || row['Device Name']);
-      const workzone = norm(row['WORKZONE'] || row['workzone']).toUpperCase();
-      const hasilUkur = norm(row['HASIL UKUR'] || row['hasil_ukur'] || row['Hasil Ukur']).toUpperCase();
+      const odp = norm(row['ODP'] || row['odp'] || (row['DEVICE NAME'] || '').split('/')[0]);
+      const timRaw = norm(row['TIM'] || row['tim'] || row['Tim']);
+      const hasilUkur = norm(row['HASIL UKUR'] || row['hasil_ukur'] || row['Hasil Ukur']).toUpperCase() || 'LOS';
       const redaman = norm(row['REDAMAN'] || row['redaman']);
 
-      if (inc && inc.startsWith('INC')) {
-        let tim = '-';
-        let ttr = '-';
-        let custType = '-';
-        let wz = workzone;
+      if (!serviceNo && !inc && !odp) continue;
 
+      let tim = timRaw;
+      let ttr = '-';
+
+      if (inc && inc.startsWith('INC')) {
         if (pantauMap.has(inc)) {
           const p = pantauMap.get(inc);
-          tim = norm(p['TIM'] || p['TIM KAWAN'] || p['TIM INSERA']) || '-';
+          if (!tim || tim === '-' || tim.toLowerCase() === 'none') {
+            tim = norm(p['TIM'] || p['TIM KAWAN'] || p['TIM INSERA']);
+          }
           ttr = norm(p['TTR']) || '-';
-          custType = norm(p['CUSTOMER TYPE']) || '-';
-          if (!wz) wz = norm(p['WORKZONE']).toUpperCase();
         }
-
-        ticketItems.push({
-          incident: inc,
-          serviceNo,
-          deviceName,
-          odp: cleanOdp(deviceName),
-          workzone: wz || 'LAINNYA',
-          hasilUkur: hasilUkur || 'LOS',
-          redaman: redaman || '-',
-          tim,
-          ttr: ttr !== '-' ? `${ttr} jam` : '-',
-          custType
-        });
-      } else if (serviceNo || deviceName) {
-        gponItems.push({
-          serviceNo: serviceNo || '-',
-          deviceName: deviceName || '-',
-          hasilUkur: hasilUkur || 'LOS'
-        });
       }
+
+      if (!tim || tim === '-' || tim.toLowerCase() === 'none') {
+        tim = 'BELUM DISPATCH';
+      }
+
+      const teamKey = tim.toUpperCase();
+      if (!groupedByTeam[teamKey]) groupedByTeam[teamKey] = [];
+
+      const huDisplay = hasilUkur === 'ONLINE' && redaman && redaman !== '-'
+        ? `ONLINE (${redaman} dB)`
+        : hasilUkur;
+
+      groupedByTeam[teamKey].push({
+        incident: inc,
+        serviceNo,
+        odp: odp || '-',
+        hasilUkur: huDisplay,
+        ttr: ttr !== '-' ? `${ttr} jam` : ''
+      });
     }
 
-    if (ticketItems.length === 0 && gponItems.length === 0) {
+    const sortedTeams = Object.keys(groupedByTeam).sort((a, b) => {
+      if (a === 'BELUM DISPATCH') return 1;
+      if (b === 'BELUM DISPATCH') return -1;
+      return a.localeCompare(b);
+    });
+
+    const totalItems = Object.values(groupedByTeam).reduce((acc, list) => acc + list.length, 0);
+
+    if (totalItems === 0) {
       console.log('[Potensi Gaul] No Potensi Gaul items to broadcast.');
       return;
-    }
-
-    // Group tickets by Workzone
-    const grouped = {};
-    for (const item of ticketItems) {
-      const wz = item.workzone || 'LAINNYA';
-      if (!grouped[wz]) grouped[wz] = [];
-      grouped[wz].push(item);
     }
 
     // Format current date in WITA (Asia/Makassar)
@@ -183,41 +181,22 @@ async function runPotensiGaulReminder() {
     }).format(now);
 
     const lines = [];
-    lines.push(`🔄 *MONITORING POTENSI GAUL (${ticketItems.length} Tiket)*`);
+    lines.push(`🔄 *MONITORING POTENSI GAUL (${totalItems} Layanan/Tiket)*`);
     lines.push(`🕒 _${witaDate} WITA_\n`);
     lines.push('━━━━━━━━━━━━━━━━━━━━━\n');
 
-    if (ticketItems.length > 0) {
-      const wzOrder = ['BLC', 'STI', 'PGT', 'KPL', 'SER', 'KIP'];
-      const sortedWz = Object.keys(grouped).sort((a, b) => {
-        const ia = wzOrder.indexOf(a);
-        const ib = wzOrder.indexOf(b);
-        if (ia !== -1 && ib !== -1) return ia - ib;
-        if (ia !== -1) return -1;
-        if (ib !== -1) return 1;
-        return a.localeCompare(b);
-      });
+    for (const team of sortedTeams) {
+      const list = groupedByTeam[team];
+      lines.push(`👤 *TIM: ${team}* (${list.length})`);
+      for (const item of list) {
+        const parts = [];
+        if (item.incident) parts.push(`\`${item.incident}\``);
+        if (item.serviceNo) parts.push(`\`${item.serviceNo}\``);
+        if (item.odp && item.odp !== '-') parts.push(`\`${item.odp}\``);
+        parts.push(`*${item.hasilUkur}*`);
+        if (item.ttr) parts.push(`\`${item.ttr}\``);
 
-      for (const wz of sortedWz) {
-        const emoji = EMOJI_WZ[wz] || EMOJI_WZ.LAINNYA;
-        const list = grouped[wz];
-        lines.push(`${emoji} *WORKZONE ${wz} (${list.length} Tiket)*`);
-        for (const item of list) {
-          const huDetail = item.hasilUkur === 'ONLINE' && item.redaman !== '-' 
-            ? `ONLINE (${item.redaman} dB)` 
-            : item.hasilUkur;
-          lines.push(`• \`${item.incident}\` • \`${item.odp}\` • \`${item.tim}\` • \`${item.ttr}\` • *${huDetail}*`);
-        }
-        lines.push('');
-      }
-    } else {
-      lines.push('• Tidak ada tiket gangguan aktif pada list Potensi Gaul saat ini.\n');
-    }
-
-    if (gponItems.length > 0) {
-      lines.push(`📡 *SUSPECT PORT / SERVICE GAUL (${gponItems.length} Layanan)*`);
-      for (const g of gponItems) {
-        lines.push(`• \`${g.serviceNo}\` — \`${g.deviceName}\` (*${g.hasilUkur}*)`);
+        lines.push(`• ${parts.join(' • ')}`);
       }
       lines.push('');
     }
