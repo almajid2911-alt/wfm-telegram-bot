@@ -70,6 +70,24 @@ function classifyTicket(r) {
   return 'REGULER';
 }
 
+function getRedamanIndicator(hasilUkur, redaman) {
+  const hu = upper(hasilUkur);
+  const rRaw = norm(redaman).replace(',', '.');
+  const num = Math.abs(parseFloat(rRaw));
+
+  if (hu === 'LOS' || !rRaw || rRaw === '-' || isNaN(num) || num === 0) {
+    return '🔴'; // LOS / Putus / Belum Ukur / Redaman -
+  }
+
+  if (num <= 24.0) {
+    return '🟢'; // Online Spek Baik (<= -24 dB)
+  } else if (num <= 27.0) {
+    return '🟡'; // Online Redaman Mepet (-24 s/d -27 dB)
+  } else {
+    return '🟠'; // Online Redaman Jelek (> -27 dB)
+  }
+}
+
 const formatTTR = v => {
   const cleanVal = String(v).replace(',', '.');
   const num = parseFloat(cleanVal);
@@ -133,11 +151,11 @@ async function runUndispatchInsera() {
 
       const ttr = formatTTR(r.TTR || r.ttr);
       const odc = simplifyODC(r['ODC REAL'] || r.odc_real, r['DEVICE NAME'] || r.device_name);
-      const fire = ttr.value > 12 ? '🔥 ' : '';
+      const indicator = getRedamanIndicator(r['HASIL UKUR'] || r.hasil_ukur, r['REDAMAN'] || r.redaman);
 
       grouped[sektor][cat].push({
         odc,
-        line: `${fire}${norm(r.INCIDENT || r.incident)} | ${odc} | ${ttr.text}`
+        line: `${indicator} ${norm(r.INCIDENT || r.incident)} | ${odc} | ${ttr.text}`
       });
     });
 
