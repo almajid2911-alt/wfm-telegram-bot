@@ -120,6 +120,7 @@ async function runPotensiGaulReminder() {
       const timRaw = norm(row['TIM'] || row['tim'] || row['Tim']);
       const hasilUkur = norm(row['HASIL UKUR'] || row['hasil_ukur'] || row['Hasil Ukur']).toUpperCase() || 'LOS';
       const redaman = norm(row['REDAMAN'] || row['redaman']);
+      const cekDispatch = norm(row['CEK DISPATCH'] || row['cek_dispatch'] || row['Cek Dispatch']);
 
       if (!serviceNo && !inc && !odp) continue;
 
@@ -152,7 +153,8 @@ async function runPotensiGaulReminder() {
         serviceNo,
         odp: odp || '-',
         hasilUkur: huDisplay,
-        ttr: ttr !== '-' ? `${ttr} jam` : ''
+        ttr: ttr !== '-' ? `${ttr} jam` : '',
+        cekDispatch
       });
     }
 
@@ -195,6 +197,13 @@ async function runPotensiGaulReminder() {
         if (item.odp && item.odp !== '-') parts.push(`\`${item.odp}\``);
         parts.push(`*${item.hasilUkur}*`);
         if (item.ttr) parts.push(`\`${item.ttr}\``);
+
+        // Warning marker if CEK DISPATCH is empty / not dispatched
+        if (!item.cekDispatch || item.cekDispatch === '-' || item.cekDispatch.toLowerCase() === 'none') {
+          parts.push(`⚠️ *BELUM DISPATCH*`);
+        } else {
+          parts.push(`*${item.cekDispatch}*`);
+        }
 
         lines.push(`• ${parts.join(' • ')}`);
       }
