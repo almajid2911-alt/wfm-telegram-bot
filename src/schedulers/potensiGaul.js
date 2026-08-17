@@ -23,7 +23,7 @@ function norm(v) {
 function cleanOdp(raw) {
   const s = norm(raw);
   if (!s || s === '-' || s.toLowerCase() === 'none') return '-';
-  return s.split('/')[0].trim();
+  return s.replace(/^(ODP-|ODC-)/i, '').trim();
 }
 
 function parseCSV(csvText) {
@@ -116,7 +116,7 @@ async function runPotensiGaulReminder() {
     for (const row of gaulRows) {
       const inc = norm(row['INCIDENT'] || row['incident']).toUpperCase();
       const serviceNo = norm(row['SERVICE NO'] || row['service_no'] || row['Service No']);
-      const odp = norm(row['ODP'] || row['odp'] || (row['DEVICE NAME'] || '').split('/')[0]);
+      const odp = cleanOdp(row['ODP'] || row['odp'] || (row['DEVICE NAME'] || '').split('/')[0]);
       const timRaw = norm(row['TIM'] || row['tim'] || row['Tim']);
       const hasilUkur = norm(row['HASIL UKUR'] || row['hasil_ukur'] || row['Hasil Ukur']).toUpperCase() || 'LOS';
       const redaman = norm(row['REDAMAN'] || row['redaman']);
@@ -195,7 +195,6 @@ async function runPotensiGaulReminder() {
         if (item.incident) parts.push(`\`${item.incident}\``);
         if (item.serviceNo) parts.push(`\`${item.serviceNo}\``);
         if (item.odp && item.odp !== '-') parts.push(`\`${item.odp}\``);
-        parts.push(`*${item.hasilUkur}*`);
         if (item.ttr) parts.push(`\`${item.ttr}\``);
 
         // Warning marker if CEK DISPATCH is empty / not dispatched
