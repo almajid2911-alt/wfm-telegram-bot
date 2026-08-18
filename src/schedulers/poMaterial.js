@@ -6,7 +6,8 @@ const SHEET_NAME = 'PO MATERIAL';
 const TARGET_CHAT_ID = process.env.CHAT_ID_PO || '-1002616721208';
 
 async function runPoMaterial() {
-  console.log('[Scheduler] Running PO Material...');
+  console.log('[Scheduler] PO Material is disabled temporarily.');
+  return;
   try {
     const rows = await getSheetRows(SPREADSHEET_ID, SHEET_NAME);
     if (!rows.length) return;

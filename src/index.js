@@ -55,10 +55,10 @@ cron.schedule('*/24 8-17 * * *',     () => runUndispatchReminder(),   { timezone
 cron.schedule('6 8-17 * * *',        () => runUndispatchXpro(),       { timezone: TIMEZONE });
 cron.schedule('*/24 8-17 * * *',     () => runFfg(),                  { timezone: TIMEZONE });
 cron.schedule('41 8-23 * * *',       () => runTiketPenting(),         { timezone: TIMEZONE });
-cron.schedule('0 8,16 * * *',        () => runPoMaterial(),           { timezone: TIMEZONE });
+// cron.schedule('0 8,16 * * *',        () => runPoMaterial(),           { timezone: TIMEZONE }); // Disabled temporarily
 cron.schedule('19 8,10,12,14,16,18,20 * * *', () => runPotensiGaulReminder(), { timezone: TIMEZONE });
 
-console.log(`✅ [Schedulers] All 10 cron jobs registered (timezone: ${TIMEZONE})`);
+console.log(`✅ [Schedulers] Active cron jobs registered (timezone: ${TIMEZONE})`);
 
 // -------------------------------------------------------------
 // 2. SETUP INTERACTIVE BOT COMMAND HANDLERS
