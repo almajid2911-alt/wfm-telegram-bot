@@ -9,6 +9,67 @@ const escapeMarkdown = (text) => {
   return text.toString().replace(/([*_[\]`])/g, '\\$1');
 };
 
+const MONTH_NAMES = {
+  1: 'JAN', 2: 'FEB', 3: 'MAR', 4: 'APR', 5: 'MAY', 6: 'JUN',
+  7: 'JUL', 8: 'AUG', 9: 'SEP', 10: 'OCT', 11: 'NOV', 12: 'DEC'
+};
+
+function parseManjaInfo(bookingDateRaw, jamManjaRaw, descAssignRaw, summaryRaw) {
+  const bd = String(bookingDateRaw || '').trim();
+  const jm = String(jamManjaRaw || '').trim();
+  const da = String(descAssignRaw || '').trim().toUpperCase();
+  const sm = String(summaryRaw || '').trim().toUpperCase();
+
+  const isManja = da.includes('CUSTOMER ASSIGN') || (bd.length > 0 && bd !== '-') || (jm.length > 0 && jm !== '-') || sm.includes('MANJA');
+  if (!isManja) return null;
+
+  // 1. Try parsing bookingDateRaw (e.g. 2026-08-21 15:00:00.0)
+  if (bd && bd !== '-') {
+    const matchYMD = bd.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})(?:[\sT]+(\d{1,2}):(\d{2}))?/);
+    if (matchYMD) {
+      const [, y, m, d, hh, mm] = matchYMD;
+      const monthStr = MONTH_NAMES[parseInt(m, 10)] || m;
+      const timeStr = hh ? `${String(hh).padStart(2, '0')}:${mm}` : (jm || '00:00');
+      return `${String(d).padStart(2, '0')}-${monthStr} ${timeStr}`;
+    }
+
+    const matchDMY = bd.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})(?:[\sT]+(\d{1,2}):(\d{2}))?/);
+    if (matchDMY) {
+      const [, d, m, y, hh, mm] = matchDMY;
+      const monthStr = MONTH_NAMES[parseInt(m, 10)] || m;
+      const timeStr = hh ? `${String(hh).padStart(2, '0')}:${mm}` : (jm || '00:00');
+      return `${String(d).padStart(2, '0')}-${monthStr} ${timeStr}`;
+    }
+
+    const matchMon = bd.match(/^(\d{1,2})[\s-]+([A-Za-z]{3})[\s-]+(\d{1,2}):(\d{2})/);
+    if (matchMon) {
+      const [, d, m, hh, mm] = matchMon;
+      return `${String(d).padStart(2, '0')}-${m.toUpperCase()} ${String(hh).padStart(2, '0')}:${mm}`;
+    }
+  }
+
+  // 2. Try parsing from summary (e.g. MANJA TGL 21 JAM 15)
+  const sumMatch = sm.match(/MANJA\s+(?:TGL\s*)?(\d{1,2})(?:[/-](\d{1,2}))?\s+(?:JAM\s*)?(\d{1,2})(?:[.:](\d{2}))?/i);
+  if (sumMatch) {
+    const [, d, m, hh, mm] = sumMatch;
+    const now = new Date();
+    const monthNum = m ? parseInt(m, 10) : (now.getMonth() + 1);
+    const monthStr = MONTH_NAMES[monthNum] || `${monthNum}`;
+    const timeStr = `${String(hh).padStart(2, '0')}:${mm || '00'}`;
+    return `${String(d).padStart(2, '0')}-${monthStr} ${timeStr}`;
+  }
+
+  if (jm && jm !== '-') {
+    return `Jam ${jm}`;
+  }
+
+  if (bd && bd !== '-') {
+    return bd;
+  }
+
+  return 'Customer Assign';
+}
+
 function extractPhoneNumbers(raw) {
   if (!raw) return [];
   const text = String(raw).trim();
@@ -73,11 +134,16 @@ async function handleInseraCommand(ctx, rawTicket) {
     let customerType = getVal(['CUSTOMER TYPE', 'Customer Type', 'CUSTOMER_TYPE', 'Segment', 'SEGMENT']) || '-';
     customerType = escapeMarkdown(customerType.toUpperCase());
 
-    const summary = escapeMarkdown(getVal(['SUMMARY', 'Summary', 'DESCRIPTION', 'Description']) || '-');
+    const rawSummary = getVal(['SUMMARY', 'Summary', 'DESCRIPTION', 'Description']) || '';
+    const summary = escapeMarkdown(rawSummary || '-');
+
+    const bookingDate = getVal(['BOOKING DATE', 'Booking Date', 'BOOKING_DATE', 'Booking_Date']);
+    const jamManja = getVal(['JAM MANJA', 'Jam Manja', 'JAM_MANJA', 'Jam_Manja']);
+    const descAssign = getVal(['DESCRIPTION ASSIGMENT', 'Description Assignment', 'DESCRIPTION_ASSIGNMENT', 'DESCRIPTION ASSIGNMENT', 'Description Assigment']);
+    const manjaInfo = parseManjaInfo(bookingDate, jamManja, descAssign, rawSummary);
 
     let deviceName = getVal(['DEVICE NAME', 'Device Name', 'DEVICE_NAME', 'ODC', 'odc']);
-    if (!deviceName && summary) {
-      const rawSummary = getVal(['SUMMARY', 'Summary', 'DESCRIPTION']);
+    if (!deviceName && rawSummary) {
       const odpMatch = rawSummary.match(/\b(ODP-[A-Za-z0-9\-/_]+(?:\s+[A-Za-z0-9\-/\.]+)?)\b/i);
       if (odpMatch) deviceName = odpMatch[1].toUpperCase();
     }
@@ -93,6 +159,9 @@ async function handleInseraCommand(ctx, rawTicket) {
     msg += `📅 *Reported:* ${reportedDate}\n`;
     msg += `👤 *Customer:* ${contactName}\n`;
     msg += `💎 *Segment:* ${customerType}\n`;
+    if (manjaInfo) {
+      msg += `⏳ *Tiket Manja:* \`${escapeMarkdown(manjaInfo)}\`\n`;
+    }
     msg += `📞 *Contact:* \`${displayPhone}\`\n`;
     msg += `🌐 *Service No:* \`${serviceNo}\`\n`;
     msg += `🔌 *Device Name:* \`${deviceName}\`\n`;
