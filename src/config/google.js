@@ -8,51 +8,81 @@ let sheetsInstance = null;
 const cache = new Map();
 const CACHE_TTL_MS = 15 * 60 * 1000;
 
-function parseCSV(csvText) {
-  const lines = csvText.split(/\r?\n/).filter(line => line.trim().length > 0);
-  if (lines.length === 0) return [];
-  
-  function parseLine(line) {
-    const result = [];
-    let cur = '';
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const c = line[i];
-      if (c === '"') {
-        inQuotes = !inQuotes;
-      } else if (c === ',' && !inQuotes) {
-        result.push(cur.trim());
-        cur = '';
+function parseCSV(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const nextChar = text[i + 1];
+
+    if (inQuotes) {
+      if (char === '"') {
+        if (nextChar === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
       } else {
-        cur += c;
+        field += char;
+      }
+    } else {
+      if (char === '"') {
+        inQuotes = true;
+      } else if (char === ',') {
+        row.push(field.trim());
+        field = '';
+      } else if (char === '\n' || char === '\r') {
+        row.push(field.trim());
+        field = '';
+        if (row.length > 1 || (row.length === 1 && row[0] !== '')) {
+          rows.push(row);
+        }
+        row = [];
+        if (char === '\r' && nextChar === '\n') {
+          i++;
+        }
+      } else {
+        field += char;
       }
     }
-    result.push(cur.trim());
-    return result;
   }
 
-  const headers = parseLine(lines[0]).map(h => h.replace(/^["']|["']$/g, '').trim());
-  const rows = [];
-  for (let i = 1; i < lines.length; i++) {
-    const values = parseLine(lines[i]);
+  if (field || row.length > 0) {
+    row.push(field.trim());
+    if (row.length > 1 || (row.length === 1 && row[0] !== '')) {
+      rows.push(row);
+    }
+  }
+
+  if (rows.length === 0) return [];
+
+  const headers = rows[0].map(h => h.replace(/^["']|["']$/g, '').trim());
+  const result = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    const vals = rows[i];
     const obj = {};
     let hasData = false;
     for (let j = 0; j < headers.length; j++) {
-      const header = headers[j];
-      if (!header) continue;
-      const rawVal = values[j] !== undefined ? values[j] : '';
-      const cleanVal = rawVal.replace(/^["']|["']$/g, '').trim();
-      obj[header] = cleanVal;
-      if (cleanVal !== '') hasData = true;
+      const h = headers[j];
+      if (!h) continue;
+      const v = vals[j] !== undefined ? vals[j].replace(/^["']|["']$/g, '').trim() : '';
+      obj[h] = v;
+      if (v !== '') hasData = true;
     }
-    if (hasData) rows.push(obj);
+    if (hasData) result.push(obj);
   }
-  return rows;
+
+  return result;
 }
 
 async function fetchCsvRows(spreadsheetId, sheetName) {
   const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
-  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(10000) });
+  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(20000) });
   if (!res.ok) {
     throw new Error(`Failed to fetch CSV: status ${res.status}`);
   }

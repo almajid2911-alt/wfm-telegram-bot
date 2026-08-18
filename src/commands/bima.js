@@ -67,14 +67,19 @@ async function handleBimaCommand(ctx, rawKeyword) {
     const odc = getVal(['ODC', 'odc', 'DEVICE NAME', 'device_name', 'ODP', 'odp']) || '-';
 
     let customerName = getVal(['Customer Name', 'Customer_Name', 'CUSTOMER NAME', 'customer_name']) || '-';
-    customerName = customerName.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
-    customerName = escapeMarkdown(customerName);
+    customerName = escapeMarkdown(customerName.toUpperCase());
 
-    let jenisOrder = getVal(['Jenis order', 'Jenis_order', 'JENIS ORDER', 'jenis_order', 'Segment', 'productname']) || '-';
+    let jenisOrder = getVal(['jenis order', 'Jenis order', 'Jenis_order', 'JENIS ORDER', 'Segment', 'productname']) || '-';
     jenisOrder = escapeMarkdown(jenisOrder.toUpperCase());
 
-    const tglManja = escapeMarkdown(getVal(['TGL MANJA', 'Tgl Manja', 'Tgl_Manja', 'tgl_manja']) || '-');
-    const paket = escapeMarkdown(getVal(['PAKET', 'paket', 'Product Name', 'product_name']) || '-');
+    const status = escapeMarkdown(getVal(['Status', 'STATUS', 'status']) || '-');
+    const tim = escapeMarkdown(getVal(['tim', 'TIM', 'Tim']) || '-');
+    const cekQc = escapeMarkdown(getVal(['cek qc', 'CEK QC', 'Cek QC', 'cek_qc']) || '-');
+    const statusMorning = escapeMarkdown(getVal(['status morning', 'STATUS MORNING', 'Status Morning', 'status_morning']) || '-');
+    const catatan = escapeMarkdown(getVal(['Catatan', 'catatan', 'CATATAN']) || '-');
+
+    const tglManja = escapeMarkdown(getVal(['TGL MANJA', 'Tgl Manja', 'Tgl_Manja', 'tgl_manja', 'MANJA', 'Booking Date']) || '-');
+    const paket = escapeMarkdown(getVal(['PAKET', 'paket', 'Product Name', 'product_name', 'Description', 'description']) || '-');
     const address = escapeMarkdown(getVal(['Address', 'address', 'ADDRESS', 'Service Address', 'Alamat']) || '-');
 
     // Ekstrak dan bersihkan nomor HP (deduplikasi nomor ganda)
@@ -87,9 +92,26 @@ async function handleBimaCommand(ctx, rawKeyword) {
     msg += `👤 *Customer Name:* ${customerName}\n`;
     msg += `📞 *Contact Number:* \`${displayPhone}\`\n`;
     msg += `📦 *Jenis Order:* ${jenisOrder}\n`;
+    if (status && status !== '-') {
+      msg += `📊 *Status:* *${status}*\n`;
+    }
+    if (tim && tim !== '-') {
+      msg += `👷 *Tim:* \`${tim}\`\n`;
+    }
+    if (cekQc && cekQc !== '-') {
+      msg += `🔍 *Cek QC:* ${cekQc}\n`;
+    }
+    if (statusMorning && statusMorning !== '-') {
+      msg += `🌅 *Status Morning:* *${statusMorning}*\n`;
+    }
     msg += `🔌 *ODC:* \`${odc}\`\n`;
-    msg += `📅 *TGL Manja:* ${tglManja}\n`;
+    if (tglManja && tglManja !== '-') {
+      msg += `📅 *TGL Manja:* ${tglManja}\n`;
+    }
     msg += `🏷️ *Paket:* ${paket}\n`;
+    if (catatan && catatan !== '-') {
+      msg += `📝 *Catatan:* ${catatan}\n`;
+    }
     msg += `🏠 *Address:* ${address}`;
 
     const buttons = [];
