@@ -62,53 +62,27 @@ function parseCSV(csvText) {
   return rows;
 }
 
-async function fetchSheetData() {
-  // Try fast direct export first, fallback to getSheetRows
+async function fetchGaulRows() {
   try {
     const urlGaul = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=67576344`;
-    const urlPantau = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=422466574`;
-
-    const [resG, resP] = await Promise.all([
-      fetch(urlGaul, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }),
-      fetch(urlPantau, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) })
-    ]);
-
-    if (resG.ok && resP.ok) {
-      const gaulRows = parseCSV(await resG.text());
-      const pantauRows = parseCSV(await resP.text());
-      return { gaulRows, pantauRows };
+    const resG = await fetch(urlGaul, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(10000) });
+    if (resG.ok) {
+      return parseCSV(await resG.text());
     }
   } catch (err) {
     console.warn('[Potensi Gaul] Direct CSV export failed, falling back to Google API:', err.message);
   }
 
-  // Fallback to getSheetRows via service account
-  const gaulRows = await getSheetRows(SPREADSHEET_ID, SHEET_NAME_GAUL, true);
-  let pantauRows = [];
-  try {
-    pantauRows = await getSheetRows(SPREADSHEET_ID, SHEET_NAME_PANTAU, true);
-  } catch (e) {
-    // Ignore pantau error
-  }
-  return { gaulRows, pantauRows };
+  return await getSheetRows(SPREADSHEET_ID, SHEET_NAME_GAUL, true);
 }
 
 async function runPotensiGaulReminder() {
   console.log('[Scheduler] Running Potensi Gaul Reminder...');
   try {
-    const { gaulRows, pantauRows } = await fetchSheetData();
+    const gaulRows = await fetchGaulRows();
     if (!gaulRows || !gaulRows.length) {
       console.log('[Potensi Gaul] No data found in sheet.');
       return;
-    }
-
-    // Build lookup map from PANTAU TTR
-    const pantauMap = new Map();
-    for (const r of (pantauRows || [])) {
-      const inc = norm(r['INCIDENT'] || r['incident']);
-      if (inc) {
-        pantauMap.set(inc.toUpperCase(), r);
-      }
     }
 
     const groupedByTeam = {};
@@ -118,25 +92,12 @@ async function runPotensiGaulReminder() {
       const serviceNo = norm(row['SERVICE NO'] || row['service_no'] || row['Service No']);
       const odp = cleanOdp(row['ODP'] || row['odp'] || (row['DEVICE NAME'] || '').split('/')[0]);
       const timRaw = norm(row['TIM'] || row['tim'] || row['Tim']);
-      const hasilUkur = norm(row['HASIL UKUR'] || row['hasil_ukur'] || row['Hasil Ukur']).toUpperCase() || 'LOS';
-      const redaman = norm(row['REDAMAN'] || row['redaman']);
       const cekDispatch = norm(row['CEK DISPATCH'] || row['cek_dispatch'] || row['Cek Dispatch']);
+      const cekCx = norm(row['CEK CX'] || row['cek_cx'] || row['Cek Cx'] || row['CEK_CX']);
 
-      if (!serviceNo && !inc && !odp) continue;
+      if (!serviceNo && !inc && !odp && !cekCx) continue;
 
       let tim = timRaw;
-      let ttr = '-';
-
-      if (inc && inc.startsWith('INC')) {
-        if (pantauMap.has(inc)) {
-          const p = pantauMap.get(inc);
-          if (!tim || tim === '-' || tim.toLowerCase() === 'none') {
-            tim = norm(p['TIM'] || p['TIM KAWAN'] || p['TIM INSERA']);
-          }
-          ttr = norm(p['TTR']) || '-';
-        }
-      }
-
       if (!tim || tim === '-' || tim.toLowerCase() === 'none') {
         tim = 'BELUM DISPATCH';
       }
@@ -144,16 +105,10 @@ async function runPotensiGaulReminder() {
       const teamKey = tim.toUpperCase();
       if (!groupedByTeam[teamKey]) groupedByTeam[teamKey] = [];
 
-      const huDisplay = hasilUkur === 'ONLINE' && redaman && redaman !== '-'
-        ? `ONLINE (${redaman} dB)`
-        : hasilUkur;
-
       groupedByTeam[teamKey].push({
-        incident: inc,
+        cxId: cekCx || inc,
         serviceNo,
         odp: odp || '-',
-        hasilUkur: huDisplay,
-        ttr: ttr !== '-' ? `${ttr} jam` : '',
         cekDispatch
       });
     }
@@ -192,14 +147,13 @@ async function runPotensiGaulReminder() {
       lines.push(`👤 *TIM: ${team}* (${list.length})`);
       for (const item of list) {
         const parts = [];
-        if (item.incident) parts.push(`\`${item.incident}\``);
+        if (item.cxId) parts.push(`\`${item.cxId}\``);
         if (item.serviceNo) parts.push(`\`${item.serviceNo}\``);
         if (item.odp && item.odp !== '-') parts.push(`\`${item.odp}\``);
-        if (item.ttr) parts.push(`\`${item.ttr}\``);
 
         // Warning marker if CEK DISPATCH is empty / not dispatched
         if (!item.cekDispatch || item.cekDispatch === '-' || item.cekDispatch.toLowerCase() === 'none') {
-          parts.push(`⚠️ *BELUM DISPATCH*`);
+          parts.push('⚠️ *BELUM DISPATCH*');
         } else {
           parts.push(`*${item.cekDispatch}*`);
         }
