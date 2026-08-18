@@ -3,8 +3,15 @@ const { broadcastBot, sendOrReplaceBroadcast } = require('../config/telegram');
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_KAWAN_ID || '1gTlZxWfKlCENvDVEDKS_qHrLqNLBXsFsy0utTv2u_hY';
 const SHEET_NAME = 'PANTAU TTR';
-// Exclude -4945019710 as requested
-const TARGET_CHATS = (process.env.CHAT_IDS_UNDISPATCH_INSERA || process.env.CHAT_ID_UNDISPATCH_INSERA || '-1004473705354,-1003190090092').split(',');
+
+// Target chats: Always include Logic Issue (-1004473705354) & Koordinasi TL/HD (-1003190090092), exclude -4945019710
+const DEFAULT_TARGET_CHATS = ['-1004473705354', '-1003190090092'];
+const envChats = (process.env.CHAT_IDS_UNDISPATCH_INSERA || process.env.CHAT_ID_UNDISPATCH_INSERA || '')
+  .split(',')
+  .map(id => id.trim())
+  .filter(id => id && id.startsWith('-') && id !== '-4945019710');
+
+const TARGET_CHATS = Array.from(new Set([...DEFAULT_TARGET_CHATS, ...envChats]));
 
 function parseCSV(csvText) {
   const lines = csvText.split(/\r?\n/).filter(line => line.trim().length > 0);
