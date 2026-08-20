@@ -4,7 +4,7 @@ const { appendSheetRow } = require('../config/google');
 const SPREADSHEET_ID = process.env.SPREADSHEET_UNSPEC_ID || '1gTlZxWfKlCENvDVEDKS_qHrLqNLBXsFsy0utTv2u_hY';
 const SHEET_NAME = 'UNSPEK KENDALA';
 const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/edit#gid=1334539597`;
-const WEBHOOK_URL = process.env.UNSPEC_WEBHOOK_URL || process.env.GOOGLE_SCRIPT_UNSPEC_URL || '';
+const WEBHOOK_URL = process.env.UNSPEC_WEBHOOK_URL || process.env.GOOGLE_SCRIPT_UNSPEC_URL || 'https://script.google.com/macros/s/AKfycbx0WSmuVoVupFcXFYltig0RNIX73FDELXnZd3b51ryUYxtKhHR7kWTN7h_ZHxsuTIvQ/exec';
 
 // In-Memory Session Storage per User (Non-blocking & Thread-Safe di Node.js)
 const sessions = new Map();
@@ -254,7 +254,7 @@ async function saveUnspecToSheet(ctx, { noInternet, odp, keterangan }) {
   const formattedTime = new Intl.DateTimeFormat('id-ID', options).format(now);
 
   try {
-    const webhookUrl = process.env.UNSPEC_WEBHOOK_URL || process.env.GOOGLE_SCRIPT_UNSPEC_URL || '';
+    const webhookUrl = WEBHOOK_URL;
     if (webhookUrl) {
       const resp = await fetch(webhookUrl, {
         method: 'POST',
@@ -264,14 +264,10 @@ async function saveUnspecToSheet(ctx, { noInternet, odp, keterangan }) {
         signal: AbortSignal.timeout(15000)
       });
       const resText = await resp.text();
-      console.log('Webhook save result:', resText);
+      console.log('✅ [Google Webhook Success]:', resText);
     } else {
-      // Format baris Google Sheet: [NO INTERNET, ODP, KETERANGAN]
-      const rowValues = [
-        noInternet,
-        odp,
-        keterangan
-      ];
+      // Fallback ke Google Sheets API
+      const rowValues = [noInternet, odp, keterangan];
       await appendSheetRow(SPREADSHEET_ID, SHEET_NAME, rowValues);
     }
 
@@ -305,17 +301,12 @@ async function saveUnspecToSheet(ctx, { noInternet, odp, keterangan }) {
     console.error('❌ [Unspec Sheet Save Error]:', err.message);
 
     let errorDetail = err.message || 'Terjadi kesalahan tidak terduga';
-    if (errorDetail.includes('403') || errorDetail.includes('permission') || errorDetail.includes('not found')) {
-      errorDetail = 'Akses Google Sheet ditolak. Pastikan email Service Account sudah dijadikan Editor di file Spreadsheet.';
-    }
-
     const errorCard = (
       `❌ <b>GAGAL MENYIMPAN KE GOOGLE SHEET</b>\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
       `⚠️ <b>Detail Kendala:</b>\n` +
       `${escapeHtml(errorDetail)}\n\n` +
-      `💡 <b>Solusi Cepat 100% Berhasil:</b>\n` +
-      `Gunakan Google Apps Script Webhook tanpa perlu kunci JSON/JWT Signature.`
+      `Silakan coba kembali dalam beberapa saat.`
     );
 
     await ctx.deleteMessage(loadingMsg.message_id).catch(() => {});
