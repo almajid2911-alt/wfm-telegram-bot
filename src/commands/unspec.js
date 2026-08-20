@@ -274,42 +274,31 @@ async function saveUnspecToSheet(ctx, { noInternet, odp, keterangan }) {
       ]
     ]);
 
-    await ctx.telegram.editMessageText(
-      ctx.chat.id,
-      loadingMsg.message_id,
-      undefined,
-      successCard,
-      { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup }
-    ).catch(async () => {
-      await ctx.reply(successCard, { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup });
+    await ctx.deleteMessage(loadingMsg.message_id).catch(() => {});
+    await ctx.reply(successCard, {
+      parse_mode: 'Markdown',
+      ...keyboard
     });
 
   } catch (err) {
     console.error('❌ [Unspec Sheet Save Error]:', err.message);
 
-    let errorDetail = err.message;
+    let errorDetail = err.message || 'Terjadi kesalahan tidak terduga';
     if (errorDetail.includes('403') || errorDetail.includes('permission') || errorDetail.includes('not found')) {
-      errorDetail = 'Akses Google Sheet ditolak. Pastikan email Service Account sudah dijadikan **Editor** di file Spreadsheet.';
+      errorDetail = 'Akses Google Sheet ditolak. Pastikan email Service Account sudah dijadikan Editor di file Spreadsheet.';
     }
 
     const errorCard = (
       `❌ *GAGAL MENYIMPAN KE GOOGLE SHEET*\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
       `⚠️ *Detail Kendala:*\n` +
-      `_${errorDetail}_\n\n` +
+      `${errorDetail}\n\n` +
       `📌 *Pastikan email Service Account berikut sudah di-share (Editor) di Google Sheet:* \n` +
       `\`pyton-75@reference-lens-470315-s1.iam.gserviceaccount.com\``
     );
 
-    await ctx.telegram.editMessageText(
-      ctx.chat.id,
-      loadingMsg.message_id,
-      undefined,
-      errorCard,
-      { parse_mode: 'Markdown' }
-    ).catch(async () => {
-      await ctx.reply(errorCard, { parse_mode: 'Markdown' });
-    });
+    await ctx.deleteMessage(loadingMsg.message_id).catch(() => {});
+    await ctx.reply(errorCard, { parse_mode: 'Markdown' });
   }
 }
 
