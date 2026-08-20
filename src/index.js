@@ -118,6 +118,10 @@ if (interactiveBot) {
     const args = ctx.message.text.trim().split(/\s+/).slice(1).join(' ').trim();
     handleUnspecCommand(ctx, args);
   });
+  interactiveBot.command('cekunspec', (ctx) => {
+    const args = ctx.message.text.trim().split(/\s+/).slice(1).join(' ').trim();
+    handleUnspecCommand(ctx, args);
+  });
   interactiveBot.command('cancel', (ctx) => {
     handleUnspecMessage(ctx);
   });
