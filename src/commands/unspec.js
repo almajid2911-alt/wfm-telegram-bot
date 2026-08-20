@@ -255,6 +255,7 @@ async function saveUnspecToSheet(ctx, { noInternet, odp, keterangan }) {
 
   try {
     const webhookUrl = WEBHOOK_URL;
+    let isUpdated = false;
     if (webhookUrl) {
       const resp = await fetch(webhookUrl, {
         method: 'POST',
@@ -264,6 +265,14 @@ async function saveUnspecToSheet(ctx, { noInternet, odp, keterangan }) {
         signal: AbortSignal.timeout(15000)
       });
       const resText = await resp.text();
+      try {
+        const resJson = JSON.parse(resText);
+        if (resJson.action === 'UPDATED') {
+          isUpdated = true;
+        }
+      } catch (e) {
+        // Ignore json parse error
+      }
       console.log('✅ [Google Webhook Success]:', resText);
     } else {
       // Fallback ke Google Sheets API
@@ -271,8 +280,12 @@ async function saveUnspecToSheet(ctx, { noInternet, odp, keterangan }) {
       await appendSheetRow(SPREADSHEET_ID, SHEET_NAME, rowValues);
     }
 
+    const titleHeader = isUpdated
+      ? `🔄 <b>DATA UNSPEK BERHASIL DIPERBARUI!</b>\n<i>(Data lama no. internet ini otomatis digantikan data terbaru)</i>`
+      : `✅ <b>DATA UNSPEK KENDALA BERHASIL DISIMPAN!</b>`;
+
     const successCard = (
-      `✅ <b>DATA UNSPEK KENDALA BERHASIL DISIMPAN!</b>\n` +
+      `${titleHeader}\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
       `🔢 <b>No. Internet :</b> <code>${escapeHtml(noInternet)}</code>\n` +
       `📍 <b>Titik ODP    :</b> <code>${escapeHtml(odp)}</code>\n` +
