@@ -27,6 +27,14 @@ function getSessionKey(ctx) {
   return `${chatId}:${userId}`;
 }
 
+const escapeHtml = (str) => {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+};
+
 const COMMON_KENDALA = [
   'Pelanggan berhenti berlangganan',
   'Pelanggan tidak bisa dihubungi / Rumah kosong',
@@ -83,19 +91,19 @@ async function handleUnspecCommand(ctx, rawArgs = '') {
   });
 
   const promptMsg = (
-    `📋 *FORM INPUT UNSPEK KENDALA*\n` +
+    `📋 <b>FORM INPUT UNSPEK KENDALA</b>\n` +
     `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-    `_Formulir rekap data unspek terkendala (Bank Data)._\n\n` +
-    `🔢 *Langkah 1/3:* Masukkan *Nomor Internet Pelanggan*\n` +
-    `_(Contoh: \`162224202225\` atau \`08123456789\`)_\n\n` +
-    `⚡ *Tips Format Cepat (1 Baris Langsung Jadi):*\n` +
-    `• \`/unspec 162224202225 ODP-PGT-FB/130 Berhenti berlangganan\`\n` +
-    `• \`/unspec 162224202225 | ODP-PGT-FB/130 | Rumah kosong\`\n\n` +
-    `💡 _Ketik \`/cancel\` kapan saja untuk membatalkan._`
+    `<i>Formulir rekap data unspek terkendala (Bank Data).</i>\n\n` +
+    `🔢 <b>Langkah 1/3:</b> Masukkan <b>Nomor Internet Pelanggan</b>\n` +
+    `<i>(Contoh: <code>162224202225</code> atau <code>08123456789</code>)</i>\n\n` +
+    `⚡ <b>Tips Format Cepat (1 Baris Langsung Jadi):</b>\n` +
+    `• <code>/unspec 162224202225 ODP-PGT-FB/130 Berhenti berlangganan</code>\n` +
+    `• <code>/unspec 162224202225 | ODP-PGT-FB/130 | Rumah kosong</code>\n\n` +
+    `💡 <i>Ketik /cancel kapan saja untuk membatalkan.</i>`
   );
 
   return ctx.reply(promptMsg, {
-    parse_mode: 'Markdown',
+    parse_mode: 'HTML',
     ...Markup.inlineKeyboard([
       [Markup.button.callback('❌ Batalkan Form', 'unspec_cancel')]
     ])
@@ -116,7 +124,7 @@ async function handleUnspecMessage(ctx) {
   // Cek jika user membatalkan
   if (text.toLowerCase() === '/cancel' || text.toLowerCase() === 'batal' || text.toLowerCase() === 'cancel') {
     sessions.delete(sessionKey);
-    await ctx.reply('❌ *Pengisian data unspek dibatalkan.*', { parse_mode: 'Markdown' });
+    await ctx.reply('❌ <b>Pengisian data unspek dibatalkan.</b>', { parse_mode: 'HTML' });
     return true;
   }
 
@@ -125,7 +133,7 @@ async function handleUnspecMessage(ctx) {
   // --- STEP 1: NOMOR INTERNET ---
   if (session.step === 'WAITING_NO_INTERNET') {
     if (text.length < 3) {
-      await ctx.reply('⚠️ Nomor Internet terlalu pendek. Masukkan nomor internet yang valid:', { parse_mode: 'Markdown' });
+      await ctx.reply('⚠️ Nomor Internet terlalu pendek. Masukkan nomor internet yang valid:', { parse_mode: 'HTML' });
       return true;
     }
 
@@ -133,14 +141,14 @@ async function handleUnspecMessage(ctx) {
     session.step = 'WAITING_ODP';
 
     const promptOdp = (
-      `✅ *No. Internet:* \`${session.noInternet}\`\n` +
+      `✅ <b>No. Internet:</b> <code>${escapeHtml(session.noInternet)}</code>\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `📍 *Langkah 2/3:* Masukkan *Nama / Titik ODP*\n` +
-      `_(Contoh: \`ODP-PGT-FB/130\` atau \`ODP-BLC-FAB/01\`)_`
+      `📍 <b>Langkah 2/3:</b> Masukkan <b>Nama / Titik ODP</b>\n` +
+      `<i>(Contoh: <code>ODP-PGT-FB/130</code> atau <code>ODP-BLC-FAB/01</code>)</i>`
     );
 
     await ctx.reply(promptOdp, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       ...Markup.inlineKeyboard([
         [Markup.button.callback('❌ Batalkan Form', 'unspec_cancel')]
       ])
@@ -151,7 +159,7 @@ async function handleUnspecMessage(ctx) {
   // --- STEP 2: ODP ---
   if (session.step === 'WAITING_ODP') {
     if (text.length < 2) {
-      await ctx.reply('⚠️ Nama ODP terlalu pendek. Masukkan nama/titik ODP yang valid:', { parse_mode: 'Markdown' });
+      await ctx.reply('⚠️ Nama ODP terlalu pendek. Masukkan nama/titik ODP yang valid:', { parse_mode: 'HTML' });
       return true;
     }
 
@@ -164,15 +172,15 @@ async function handleUnspecMessage(ctx) {
     buttons.push([Markup.button.callback('❌ Batalkan Form', 'unspec_cancel')]);
 
     const promptKet = (
-      `✅ *No. Internet:* \`${session.noInternet}\`\n` +
-      `✅ *ODP:* \`${session.odp}\`\n` +
+      `✅ <b>No. Internet:</b> <code>${escapeHtml(session.noInternet)}</code>\n` +
+      `✅ <b>ODP:</b> <code>${escapeHtml(session.odp)}</code>\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `⚠️ *Langkah 3/3:* Pilih atau ketik *Keterangan Kendala*:\n\n` +
-      `_Klik salah satu tombol opsi cepat di bawah atau ketik keterangan manual secara langsung._`
+      `⚠️ <b>Langkah 3/3:</b> Pilih atau ketik <b>Keterangan Kendala</b>:\n\n` +
+      `<i>Klik salah satu tombol opsi cepat di bawah atau ketik keterangan manual secara langsung.</i>`
     );
 
     await ctx.reply(promptKet, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       ...Markup.inlineKeyboard(buttons)
     });
     return true;
@@ -205,7 +213,7 @@ async function handleUnspecCallback(ctx) {
   if (data === 'unspec_cancel') {
     sessions.delete(sessionKey);
     await ctx.answerCbQuery('Dibatalkan').catch(() => {});
-    await ctx.editMessageText('❌ *Pengisian data unspek kendala telah dibatalkan.*', { parse_mode: 'Markdown' }).catch(() => {});
+    await ctx.editMessageText('❌ <b>Pengisian data unspek kendala telah dibatalkan.</b>', { parse_mode: 'HTML' }).catch(() => {});
     return true;
   }
 
@@ -237,7 +245,7 @@ async function handleUnspecCallback(ctx) {
  * Simpan Data ke Google Sheets Tab "UNSPEK KENDALA"
  */
 async function saveUnspecToSheet(ctx, { noInternet, odp, keterangan }) {
-  const loadingMsg = await ctx.reply('⏳ *Sedang mencatat ke Google Sheet Bank Data...*', { parse_mode: 'Markdown' });
+  const loadingMsg = await ctx.reply('⏳ <i>Sedang mencatat ke Google Sheet Bank Data...</i>', { parse_mode: 'HTML' });
 
   const fromName = [ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(' ') || ctx.from?.username || 'Teknisi';
   const now = new Date();
@@ -255,16 +263,16 @@ async function saveUnspecToSheet(ctx, { noInternet, odp, keterangan }) {
     await appendSheetRow(SPREADSHEET_ID, SHEET_NAME, rowValues);
 
     const successCard = (
-      `✅ *DATA UNSPEK KENDALA BERHASIL DISIMPAN!*\n` +
+      `✅ <b>DATA UNSPEK KENDALA BERHASIL DISIMPAN!</b>\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `🔢 *No. Internet :* \`${noInternet}\`\n` +
-      `📍 *Titik ODP    :* \`${odp}\`\n` +
-      `⚠️ *Keterangan   :* *${keterangan}*\n` +
+      `🔢 <b>No. Internet :</b> <code>${escapeHtml(noInternet)}</code>\n` +
+      `📍 <b>Titik ODP    :</b> <code>${escapeHtml(odp)}</code>\n` +
+      `⚠️ <b>Keterangan   :</b> <b>${escapeHtml(keterangan)}</b>\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `👤 *Petugas      :* ${fromName}\n` +
-      `🕒 *Waktu        :* ${formattedTime} WITA\n` +
-      `📊 *Database     :* Sheet \`${SHEET_NAME}\`\n\n` +
-      `💡 _Data telah berhasil masuk ke bank data rekap unspek._`
+      `👤 <b>Petugas      :</b> ${escapeHtml(fromName)}\n` +
+      `🕒 <b>Waktu        :</b> ${escapeHtml(formattedTime)} WITA\n` +
+      `📊 <b>Database     :</b> Sheet <code>${escapeHtml(SHEET_NAME)}</code>\n\n` +
+      `💡 <i>Data telah berhasil masuk ke bank data rekap unspek.</i>`
     );
 
     const keyboard = Markup.inlineKeyboard([
@@ -276,7 +284,7 @@ async function saveUnspecToSheet(ctx, { noInternet, odp, keterangan }) {
 
     await ctx.deleteMessage(loadingMsg.message_id).catch(() => {});
     await ctx.reply(successCard, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       ...keyboard
     });
 
@@ -289,16 +297,16 @@ async function saveUnspecToSheet(ctx, { noInternet, odp, keterangan }) {
     }
 
     const errorCard = (
-      `❌ *GAGAL MENYIMPAN KE GOOGLE SHEET*\n` +
+      `❌ <b>GAGAL MENYIMPAN KE GOOGLE SHEET</b>\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `⚠️ *Detail Kendala:*\n` +
-      `${errorDetail}\n\n` +
-      `📌 *Pastikan email Service Account berikut sudah di-share (Editor) di Google Sheet:* \n` +
-      `\`pyton-75@reference-lens-470315-s1.iam.gserviceaccount.com\``
+      `⚠️ <b>Detail Kendala:</b>\n` +
+      `${escapeHtml(errorDetail)}\n\n` +
+      `📌 <b>Pastikan email Service Account berikut sudah di-share (Editor) di Google Sheet:</b> \n` +
+      `<code>pyton-75@reference-lens-470315-s1.iam.gserviceaccount.com</code>`
     );
 
     await ctx.deleteMessage(loadingMsg.message_id).catch(() => {});
-    await ctx.reply(errorCard, { parse_mode: 'Markdown' });
+    await ctx.reply(errorCard, { parse_mode: 'HTML' });
   }
 }
 

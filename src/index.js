@@ -162,12 +162,13 @@ if (interactiveBot) {
 
   // Teks langsung (tanpa slash)
   interactiveBot.on('text', async (ctx, next) => {
+    const text = (ctx.message.text || '').trim();
+    if (text.startsWith('/')) return next();
+
     // 1. Prioritaskan sesi pengisian interaktif unspec jika user sedang di dalam form
     const handledByUnspec = await handleUnspecMessage(ctx);
     if (handledByUnspec) return;
 
-    const text = (ctx.message.text || '').trim();
-    if (text.startsWith('/')) return next();
     const incMatch = text.match(/^\s*(INC?\d+)\b/i);
     if (incMatch) return handleInseraCommand(ctx, incMatch[1]);
     const bimaMatch = text.match(/^\s*(AO\w+|1\d+|TI\w+|SC\w+|MO\w+|PD\w+)\b/i);
