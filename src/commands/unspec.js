@@ -28,12 +28,10 @@ function getSessionKey(ctx) {
 }
 
 const COMMON_KENDALA = [
-  'Port ODP Penuh / Full',
-  'Redaman Tinggi / Loss Sinyal',
-  'Jarak ODP Terlalu Jauh (>250m)',
-  'Kabel Drop Core Rusak / Putus',
-  'Tiang Patah / ODP Rusak',
-  'Pelanggan Menolak / Batal Pasang'
+  'Pelanggan berhenti berlangganan',
+  'Pelanggan tidak bisa dihubungi / Rumah kosong',
+  'Jarak Tarikan Terlalu Jauh (>250m)',
+  'Feeder / Distribusi Cacat'
 ];
 
 /**
