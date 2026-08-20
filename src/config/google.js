@@ -203,19 +203,24 @@ async function getSheetRows(spreadsheetId, sheetName, forceFresh = false) {
 async function appendSheetRow(spreadsheetId, sheetName, rowValues) {
   const sheets = await getSheetsClient();
   if (!sheets) {
-    throw new Error('Google Sheets client belum terkonfigurasi atau kredensial tidak ditemukan.');
+    throw new Error('Google Sheets API belum terotentikasi. Pastikan Service Account credentials terpasang.');
   }
 
-  const range = `'${sheetName}'!A:Z`;
-  const res = await sheets.spreadsheets.values.append({
-    spreadsheetId,
-    range,
-    valueInputOption: 'USER_ENTERED',
-    insertDataOption: 'INSERT_ROWS',
-    requestBody: {
-      values: [rowValues]
+  const range = `'${sheetName}'!A:C`;
+  const res = await sheets.spreadsheets.values.append(
+    {
+      spreadsheetId,
+      range,
+      valueInputOption: 'USER_ENTERED',
+      insertDataOption: 'INSERT_ROWS',
+      requestBody: {
+        values: [rowValues]
+      }
+    },
+    {
+      timeout: 12000 // 12 Detik Timeout
     }
-  });
+  );
 
   // Hapus cache agar pembacaan berikutnya memuat data paling baru
   const cacheKey = `${spreadsheetId}_${sheetName}`;

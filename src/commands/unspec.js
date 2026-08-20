@@ -5,7 +5,7 @@ const SPREADSHEET_ID = process.env.SPREADSHEET_UNSPEC_ID || '1gTlZxWfKlCENvDVEDK
 const SHEET_NAME = 'UNSPEK KENDALA';
 const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/edit#gid=1334539597`;
 
-// In-Memory Session Storage (TTL 10 Menit per User)
+// In-Memory Session Storage per User (Non-blocking & Thread-Safe di Node.js)
 const sessions = new Map();
 const SESSION_TTL_MS = 10 * 60 * 1000;
 
@@ -18,12 +18,12 @@ function cleanupOldSessions() {
   }
 }
 
-// Jalankan pembersihan sesi kedaluwarsa setiap 5 menit
+// Bersihkan sesi kedaluwarsa secara berkala
 setInterval(cleanupOldSessions, 5 * 60 * 1000);
 
 function getSessionKey(ctx) {
-  const chatId = ctx.chat?.id;
-  const userId = ctx.from?.id;
+  const chatId = ctx.chat?.id || 0;
+  const userId = ctx.from?.id || 0;
   return `${chatId}:${userId}`;
 }
 
@@ -42,21 +42,38 @@ async function handleUnspecCommand(ctx, rawArgs = '') {
   const sessionKey = getSessionKey(ctx);
   const text = (rawArgs || '').trim();
 
-  // 1. DUKUNGAN INPUT CEPAT 1 BARIS: /unspec 172312345678 | ODP-BLC-FAB/01 | Port ODP Penuh
-  if (text && (text.includes('|') || text.includes(','))) {
-    const parts = text.includes('|') ? text.split('|') : text.split(',');
-    if (parts.length >= 3) {
-      const noInternet = parts[0].trim();
-      const odp = parts[1].trim();
-      const keterangan = parts.slice(2).join(' - ').trim();
+  // 1. DUKUNGAN INPUT CEPAT 1 BARIS:
+  // Contoh 1: /unspec 162224202225 ODP-PGT-FB/130 Berhenti berlangganan
+  // Contoh 2: /unspec 162224202225 | ODP-PGT-FB/130 | Berhenti berlangganan
+  if (text) {
+    let noInternet = '';
+    let odp = '';
+    let keterangan = '';
 
-      if (noInternet && odp && keterangan) {
-        return await saveUnspecToSheet(ctx, { noInternet, odp, keterangan });
+    if (text.includes('|') || text.includes(',')) {
+      const parts = text.includes('|') ? text.split('|') : text.split(',');
+      if (parts.length >= 3) {
+        noInternet = parts[0].trim();
+        odp = parts[1].trim();
+        keterangan = parts.slice(2).join(' - ').trim();
       }
+    } else {
+      // Format spasi: /unspec <no_inet> <odp> <keterangan...>
+      const tokens = text.split(/\s+/);
+      if (tokens.length >= 3) {
+        noInternet = tokens[0].trim();
+        odp = tokens[1].trim();
+        keterangan = tokens.slice(2).join(' ').trim();
+      }
+    }
+
+    if (noInternet && odp && keterangan) {
+      sessions.delete(sessionKey);
+      return await saveUnspecToSheet(ctx, { noInternet, odp, keterangan });
     }
   }
 
-  // 2. MODE WIZARD INTERAKTIF (LANGKAH DEMI LANGKAH)
+  // 2. MODE FORM INTERAKTIF (STEP-BY-STEP)
   sessions.set(sessionKey, {
     step: 'WAITING_NO_INTERNET',
     noInternet: '',
@@ -66,11 +83,14 @@ async function handleUnspecCommand(ctx, rawArgs = '') {
   });
 
   const promptMsg = (
-    `📋 *INPUT DATA UNSPEK KENDALA*\n` +
+    `📋 *FORM INPUT UNSPEK KENDALA*\n` +
     `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-    `_Formulir rekap data unspek terkendala untuk Bank Data._\n\n` +
-    `🔢 *Langkah 1/3:* Silakan masukkan *Nomor Internet Pelanggan*\n` +
-    `_(Contoh: \`172312345678\` atau \`08123456789\`)_\n\n` +
+    `_Formulir rekap data unspek terkendala (Bank Data)._\n\n` +
+    `🔢 *Langkah 1/3:* Masukkan *Nomor Internet Pelanggan*\n` +
+    `_(Contoh: \`162224202225\` atau \`08123456789\`)_\n\n` +
+    `⚡ *Tips Format Cepat (1 Baris Langsung Jadi):*\n` +
+    `• \`/unspec 162224202225 ODP-PGT-FB/130 Berhenti berlangganan\`\n` +
+    `• \`/unspec 162224202225 | ODP-PGT-FB/130 | Rumah kosong\`\n\n` +
     `💡 _Ketik \`/cancel\` kapan saja untuk membatalkan._`
   );
 
@@ -89,7 +109,7 @@ async function handleUnspecMessage(ctx) {
   const sessionKey = getSessionKey(ctx);
   const session = sessions.get(sessionKey);
 
-  if (!session) return false; // Bukan sesi unspec, biarkan middleware lain memproses
+  if (!session) return false;
 
   const text = (ctx.message.text || '').trim();
 
@@ -116,7 +136,7 @@ async function handleUnspecMessage(ctx) {
       `✅ *No. Internet:* \`${session.noInternet}\`\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
       `📍 *Langkah 2/3:* Masukkan *Nama / Titik ODP*\n` +
-      `_(Contoh: \`ODP-BLC-FAB/01\` atau \`ODP-KTB-FA/12\`)_`
+      `_(Contoh: \`ODP-PGT-FB/130\` atau \`ODP-BLC-FAB/01\`)_`
     );
 
     await ctx.reply(promptOdp, {
@@ -191,22 +211,21 @@ async function handleUnspecCallback(ctx) {
 
   if (data.startsWith('unspec_k_')) {
     if (!session || session.step !== 'WAITING_KETERANGAN') {
-      await ctx.answerCbQuery('Sesi pengisian telah kedaluwarsa. Silakan ketik /unspec ulang.').catch(() => {});
+      await ctx.answerCbQuery('Sesi pengisian telah selesai/kedaluwarsa. Silakan ketik /unspec ulang.').catch(() => {});
       return true;
     }
 
     const idx = parseInt(data.replace('unspec_k_', ''), 10);
     const selectedKendala = COMMON_KENDALA[idx] || 'Kendala Lapangan';
 
-    session.keterangan = selectedKendala;
     const dataToSave = {
       noInternet: session.noInternet,
       odp: session.odp,
-      keterangan: session.keterangan
+      keterangan: selectedKendala
     };
 
     sessions.delete(sessionKey);
-    await ctx.answerCbQuery('Menyimpan data...').catch(() => {});
+    await ctx.answerCbQuery('Mencatat ke Google Sheet...').catch(() => {});
     await saveUnspecToSheet(ctx, dataToSave);
     return true;
   }
@@ -245,7 +264,7 @@ async function saveUnspecToSheet(ctx, { noInternet, odp, keterangan }) {
       `👤 *Petugas      :* ${fromName}\n` +
       `🕒 *Waktu        :* ${formattedTime} WITA\n` +
       `📊 *Database     :* Sheet \`${SHEET_NAME}\`\n\n` +
-      `💡 _Data telah masuk ke bank data rekap unspek terkendala._`
+      `💡 _Data telah berhasil masuk ke bank data rekap unspek._`
     );
 
     const keyboard = Markup.inlineKeyboard([
@@ -258,27 +277,34 @@ async function saveUnspecToSheet(ctx, { noInternet, odp, keterangan }) {
     await ctx.telegram.editMessageText(
       ctx.chat.id,
       loadingMsg.message_id,
-      null,
+      undefined,
       successCard,
-      { parse_mode: 'Markdown', ...keyboard }
+      { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup }
     ).catch(async () => {
-      await ctx.reply(successCard, { parse_mode: 'Markdown', ...keyboard });
+      await ctx.reply(successCard, { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup });
     });
 
   } catch (err) {
     console.error('❌ [Unspec Sheet Save Error]:', err.message);
+
+    let errorDetail = err.message;
+    if (errorDetail.includes('403') || errorDetail.includes('permission') || errorDetail.includes('not found')) {
+      errorDetail = 'Akses Google Sheet ditolak. Pastikan email Service Account sudah dijadikan **Editor** di file Spreadsheet.';
+    }
+
     const errorCard = (
       `❌ *GAGAL MENYIMPAN KE GOOGLE SHEET*\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `Terjadi kendala saat menyimpan baris data ke sheet:\n` +
-      `_${err.message}_\n\n` +
-      `Silakan coba beberapa saat lagi atau hubungi admin WFM.`
+      `⚠️ *Detail Kendala:*\n` +
+      `_${errorDetail}_\n\n` +
+      `📌 *Pastikan email Service Account berikut sudah di-share (Editor) di Google Sheet:* \n` +
+      `\`pyton-75@reference-lens-470315-s1.iam.gserviceaccount.com\``
     );
 
     await ctx.telegram.editMessageText(
       ctx.chat.id,
       loadingMsg.message_id,
-      null,
+      undefined,
       errorCard,
       { parse_mode: 'Markdown' }
     ).catch(async () => {
