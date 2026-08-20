@@ -4,7 +4,7 @@ const { getSheetRows, appendSheetRow } = require('../config/google');
 const SPREADSHEET_ID = process.env.SPREADSHEET_UNSPEC_ID || '1gTlZxWfKlCENvDVEDKS_qHrLqNLBXsFsy0utTv2u_hY';
 const SHEET_NAME = 'UNSPEK KENDALA';
 const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/edit#gid=1334539597`;
-const WEBHOOK_URL = process.env.UNSPEC_WEBHOOK_URL || process.env.GOOGLE_SCRIPT_UNSPEC_URL || 'https://script.google.com/macros/s/AKfycbx0WSmuVoVupFcXFYltig0RNIX73FDELXnZd3b51ryUYxtKhHR7kWTN7h_ZHxsuTIvQ/exec';
+const WEBHOOK_URL = process.env.UNSPEC_WEBHOOK_URL || process.env.GOOGLE_SCRIPT_UNSPEC_URL || 'https://script.google.com/macros/s/AKfycbw2ljKEVZXT6j2aS03lYMVqgvTa0xlZu-Okw973_nUhalgz_O-KkQGcmLdoJtmRL0YI/exec';
 
 // In-Memory Session Storage per User (Non-blocking & Thread-Safe di Node.js)
 const sessions = new Map();
