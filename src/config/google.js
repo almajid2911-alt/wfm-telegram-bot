@@ -197,7 +197,35 @@ async function getSheetRows(spreadsheetId, sheetName, forceFresh = false) {
   }
 }
 
+/**
+ * Append row(s) to a Google Sheet tab
+ */
+async function appendSheetRow(spreadsheetId, sheetName, rowValues) {
+  const sheets = await getSheetsClient();
+  if (!sheets) {
+    throw new Error('Google Sheets client belum terkonfigurasi atau kredensial tidak ditemukan.');
+  }
+
+  const range = `'${sheetName}'!A:Z`;
+  const res = await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range,
+    valueInputOption: 'USER_ENTERED',
+    insertDataOption: 'INSERT_ROWS',
+    requestBody: {
+      values: [rowValues]
+    }
+  });
+
+  // Hapus cache agar pembacaan berikutnya memuat data paling baru
+  const cacheKey = `${spreadsheetId}_${sheetName}`;
+  cache.delete(cacheKey);
+
+  return res.data;
+}
+
 module.exports = {
   getSheetsClient,
-  getSheetRows
+  getSheetRows,
+  appendSheetRow
 };
