@@ -4,6 +4,7 @@ const { appendSheetRow } = require('../config/google');
 const SPREADSHEET_ID = process.env.SPREADSHEET_UNSPEC_ID || '1gTlZxWfKlCENvDVEDKS_qHrLqNLBXsFsy0utTv2u_hY';
 const SHEET_NAME = 'UNSPEK KENDALA';
 const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/edit#gid=1334539597`;
+const WEBHOOK_URL = process.env.UNSPEC_WEBHOOK_URL || process.env.GOOGLE_SCRIPT_UNSPEC_URL || '';
 
 // In-Memory Session Storage per User (Non-blocking & Thread-Safe di Node.js)
 const sessions = new Map();
@@ -253,14 +254,26 @@ async function saveUnspecToSheet(ctx, { noInternet, odp, keterangan }) {
   const formattedTime = new Intl.DateTimeFormat('id-ID', options).format(now);
 
   try {
-    // Format baris Google Sheet: [NO INTERNET, ODP, KETERANGAN]
-    const rowValues = [
-      noInternet,
-      odp,
-      keterangan
-    ];
-
-    await appendSheetRow(SPREADSHEET_ID, SHEET_NAME, rowValues);
+    const webhookUrl = process.env.UNSPEC_WEBHOOK_URL || process.env.GOOGLE_SCRIPT_UNSPEC_URL || '';
+    if (webhookUrl) {
+      const resp = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ noInternet, odp, keterangan, petugas: fromName, waktu: formattedTime }),
+        redirect: 'follow',
+        signal: AbortSignal.timeout(15000)
+      });
+      const resText = await resp.text();
+      console.log('Webhook save result:', resText);
+    } else {
+      // Format baris Google Sheet: [NO INTERNET, ODP, KETERANGAN]
+      const rowValues = [
+        noInternet,
+        odp,
+        keterangan
+      ];
+      await appendSheetRow(SPREADSHEET_ID, SHEET_NAME, rowValues);
+    }
 
     const successCard = (
       `✅ <b>DATA UNSPEK KENDALA BERHASIL DISIMPAN!</b>\n` +
@@ -301,8 +314,8 @@ async function saveUnspecToSheet(ctx, { noInternet, odp, keterangan }) {
       `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
       `⚠️ <b>Detail Kendala:</b>\n` +
       `${escapeHtml(errorDetail)}\n\n` +
-      `📌 <b>Pastikan email Service Account berikut sudah di-share (Editor) di Google Sheet:</b> \n` +
-      `<code>pyton-75@reference-lens-470315-s1.iam.gserviceaccount.com</code>`
+      `💡 <b>Solusi Cepat 100% Berhasil:</b>\n` +
+      `Gunakan Google Apps Script Webhook tanpa perlu kunci JSON/JWT Signature.`
     );
 
     await ctx.deleteMessage(loadingMsg.message_id).catch(() => {});
