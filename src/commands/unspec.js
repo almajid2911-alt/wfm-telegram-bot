@@ -120,7 +120,6 @@ async function searchUnspecHistory(ctx, searchedNoInet) {
 
       const keyboard = Markup.inlineKeyboard([
         [
-          Markup.button.url('📊 Buka Google Sheet', SHEET_URL),
           Markup.button.callback('✏️ Update Data Ini', `unspec_reinput_${target}`)
         ]
       ]);
@@ -457,15 +456,13 @@ async function saveUnspecToSheet(ctx, { noInternet, odp, keterangan }) {
       `⚠️ <b>Keterangan   :</b> <b>${escapeHtml(keterangan)}</b>\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
       `🕒 <b>Waktu Update :</b> ${escapeHtml(formattedTime)} WITA\n` +
-      `👤 <b>Petugas      :</b> ${escapeHtml(petugasInfo)}\n` +
-      `📊 <b>Database     :</b> Sheet <code>${escapeHtml(SHEET_NAME)}</code>\n\n` +
+      `👤 <b>Petugas      :</b> ${escapeHtml(petugasInfo)}\n\n` +
       `💡 <i>Data telah berhasil masuk ke bank data rekap unspek.</i>`
     );
 
     const keyboard = Markup.inlineKeyboard([
       [
-        Markup.button.url('📊 Buka Google Sheet', SHEET_URL),
-        Markup.button.callback('➕ Tambah Lagi', 'unspec_start_again')
+        Markup.button.callback('➕ Tambah Data Lagi', 'unspec_start_again')
       ]
     ]);
 
