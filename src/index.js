@@ -270,6 +270,7 @@ server.listen(PORT, '0.0.0.0', async () => {
 
         // Daftarkan bot commands menu (hanya sekali setelah webhook berhasil)
         await interactiveBot.telegram.setMyCommands([
+          { command: 'alker',   description: '🛠️ Cek & Update Alat Kerja (Alker)' },
           { command: 'unspec',  description: '📝 Rekap data unspek kendala (Bank Data)' },
           { command: 'mapping', description: '📊 Mapping WO per sektor' },
           { command: 'tiket',   description: '🎫 Monitoring sisa tiket per sektor' },
