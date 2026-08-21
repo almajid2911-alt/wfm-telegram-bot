@@ -337,13 +337,13 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // ✅ 3. API: Verifikasi Kode OTP atau NIK
+  // ✅ 3. API: Verifikasi Kode OTP Telegram
   if (req.method === 'POST' && pathname === '/api/alker/verify-otp') {
     let body = '';
     req.on('data', (chunk) => { body += chunk.toString(); });
     req.on('end', async () => {
       try {
-        const { technicianName, nik, inputCode } = JSON.parse(body || '{}');
+        const { technicianName, inputCode } = JSON.parse(body || '{}');
         const code = String(inputCode || '').trim();
         const techKey = String(technicianName || '').trim().toUpperCase();
 
@@ -353,28 +353,16 @@ const server = http.createServer(async (req, res) => {
           return res.end(JSON.stringify({ success: true, verified: true, token: 'MASTER_AUTH' }));
         }
 
-        // 2. Cek OTP di memory
+        // 2. Cek OTP Telegram di memory
         const stored = otpStore.get(techKey);
         if (stored && stored.code === code && Date.now() < stored.expiresAt) {
+          otpStore.delete(techKey); // Single-use consumption
           res.writeHead(200, { 'Content-Type': 'application/json' });
           return res.end(JSON.stringify({ success: true, verified: true, token: 'OTP_AUTH_' + code }));
         }
 
-        // 3. Cek apakah inputCode adalah NIK teknisi yang cocok di NAKER
-        const nakerRows = await getSheetRows(SPREADSHEET_ID, SHEET_NAKER, true);
-        const tech = nakerRows.find(n => {
-          const name = String(n['NAMA'] || n['Nama'] || '').trim().toUpperCase();
-          const nNik = String(n['NIK'] || '').trim();
-          return name === techKey && (nNik === code || (nik && nNik === String(nik) && code === nNik));
-        });
-
-        if (tech) {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          return res.end(JSON.stringify({ success: true, verified: true, token: 'NIK_AUTH_' + code }));
-        }
-
         res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: false, message: 'Kode OTP atau NIK tidak sesuai. Silakan periksa kembali.' }));
+        res.end(JSON.stringify({ success: false, message: 'Kode OTP Telegram salah atau sudah kedaluwarsa (5 menit).' }));
       } catch (err) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: false, message: err.message }));
@@ -437,6 +425,11 @@ const server = http.createServer(async (req, res) => {
       try {
         const payload = JSON.parse(body);
         const { technicianName, technicianNik, sektor, leader, items, authToken } = payload;
+
+        if (!authToken || (!authToken.startsWith('OTP_AUTH_') && authToken !== 'MASTER_AUTH')) {
+          res.writeHead(403, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ success: false, message: 'Akses Ditolak: Verifikasi OTP Telegram wajib dilakukan sebelum submit.' }));
+        }
 
         if (!technicianName || !items || !Array.isArray(items)) {
           res.writeHead(400, { 'Content-Type': 'application/json' });

@@ -99,29 +99,29 @@ function renderAlkerFormHtml() {
       </div>
     </div>
 
-    <!-- STEP 2: SECURITY VERIFICATION (OTP / PIN NIK) -->
+    <!-- STEP 2: SECURITY VERIFICATION (STRICT TELEGRAM OTP) -->
     <div id="sectionSecurity" class="hidden bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
       <div class="flex items-center justify-between border-b border-slate-800/80 pb-2">
         <span class="text-xs font-bold text-slate-300 flex items-center">
-          <i class="fa-solid fa-shield-halved text-amber-400 mr-2"></i> 2. Verifikasi Keamanan (Anti-Fraud)
+          <i class="fa-solid fa-shield-halved text-amber-400 mr-2"></i> 2. Verifikasi OTP Telegram (Anti-Fraud)
         </span>
-        <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 font-mono" id="secBadge">BELUM VERIFIKASI</span>
+        <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 font-mono" id="secBadge">WAJIB OTP</span>
       </div>
 
       <p class="text-[11px] text-slate-400 leading-relaxed">
-        Untuk memastikan data alker tidak diubah oleh teknisi lain, silakan minta <strong>Kode OTP via Telegram</strong> atau masukkan <strong>NIK Anda</strong>:
+        Demi keamanan agar data tidak dimanipulasi orang lain, silakan klik tombol di bawah untuk menerima <strong>Kode OTP 6-Digit</strong> di chat pribadi Telegram Anda:
       </p>
 
-      <div class="space-y-2">
+      <div class="space-y-2.5">
         <!-- Request Telegram OTP Button -->
         <button type="button" onclick="requestTelegramOtp()" id="btnRequestOtp" class="w-full py-2.5 px-3 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 text-xs font-semibold flex items-center justify-center space-x-2 transition active:scale-[0.98]">
           <i class="fa-brands fa-telegram text-sm"></i>
-          <span id="txtRequestOtp">📲 Kirim Kode OTP ke Telegram Saya</span>
+          <span id="txtRequestOtp">📲 Minta Kode OTP ke Telegram Saya</span>
         </button>
 
         <div class="flex gap-2">
-          <input type="password" id="inputOtpOrPin" placeholder="Masukkan 6 Digit OTP / NIK..." class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder-slate-500 font-mono tracking-wider focus:outline-none focus:border-amber-500">
-          <button type="button" onclick="verifySecurityInput()" id="btnVerify" class="py-2 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition active:scale-95">
+          <input type="text" inputmode="numeric" maxlength="6" id="inputOtpOrPin" placeholder="Masukkan 6 Digit OTP..." class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder-slate-500 font-mono tracking-widest text-center text-sm font-bold focus:outline-none focus:border-amber-500">
+          <button type="button" onclick="verifySecurityInput()" id="btnVerify" class="py-2 px-5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition active:scale-95">
             Verifikasi
           </button>
         </div>
