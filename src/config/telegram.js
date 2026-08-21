@@ -14,8 +14,9 @@ const telegrafConfig = {
 const broadcastToken = cleanToken(process.env.TELEGRAM_BROADCAST_BOT_TOKEN) || '8407209552:AAG06OhudzjkwBgipOp5GErfaCTJWClherg';
 const broadcastBot = broadcastToken ? new Telegraf(broadcastToken, telegrafConfig) : null;
 
-// 2. Bot Interaktif (Perintah / Command) - Default: @VALINS12BOT (8530881347)
-const interactiveToken = cleanToken(process.env.TELEGRAM_INTERACTIVE_BOT_TOKEN) || cleanToken(process.env.TELEGRAM_BOT_TOKEN) || '8651542305:AAF75WuD9xdBkk13Vr5g8wNFe4SW5cuTgso';
+// 2. Bot Interaktif (Perintah / Command) - Default: @jemba12bot (8651542305)
+const envToken = cleanToken(process.env.TELEGRAM_INTERACTIVE_BOT_TOKEN) || cleanToken(process.env.TELEGRAM_BOT_TOKEN);
+const interactiveToken = (envToken && !envToken.startsWith('8530881347')) ? envToken : '8651542305:AAF75WuD9xdBkk13Vr5g8wNFe4SW5cuTgso';
 const interactiveBot = interactiveToken ? new Telegraf(interactiveToken, telegrafConfig) : null;
 
 // 3. Bot PO Material (External / Logistik)

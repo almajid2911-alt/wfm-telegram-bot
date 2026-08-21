@@ -206,18 +206,18 @@ if (interactiveBot) {
   });
   interactiveBot.action(/^alker_/, async (ctx) => { await handleAlkerCallback(ctx); });
 
-  // Teks langsung (tanpa slash)
-  interactiveBot.on('text', async (ctx, next) => {
-    const text = (ctx.message.text || '').trim();
-    if (text.startsWith('/')) return next();
-
+  // Teks langsung & Foto (untuk Unspec & Alker Photo Upload)
+  interactiveBot.on(['text', 'photo'], async (ctx, next) => {
     // 1. Prioritaskan sesi pengisian interaktif unspec jika user sedang di dalam form
     const handledByUnspec = await handleUnspecMessage(ctx);
     if (handledByUnspec) return;
 
-    // 2. Prioritaskan sesi pengisian keterangan alker
+    // 2. Prioritaskan sesi pengisian keterangan alker / upload foto alker
     const handledByAlker = await handleAlkerMessage(ctx);
     if (handledByAlker) return;
+
+    const text = (ctx.message.text || ctx.message.caption || '').trim();
+    if (!text || text.startsWith('/')) return next();
 
     const incMatch = text.match(/^\s*(INC?\d+)\b/i);
     if (incMatch) return handleInseraCommand(ctx, incMatch[1]);

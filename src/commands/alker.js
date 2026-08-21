@@ -1,5 +1,6 @@
 const { Markup } = require('telegraf');
 const { getSheetRows } = require('../config/google');
+const { interactiveBot } = require('../config/telegram');
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ALKER_ID || '1Vk5RsTMxAJDI71SAo_75j5nopV70qxd8C6k8Wrn8HQA';
 const SHEET_ALKER = 'DataAlker';
@@ -477,13 +478,16 @@ async function handleAlkerMessage(ctx) {
       `🕒 <b>Waktu   :</b> ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Makassar' })} WITA`
     );
 
+    const tg = interactiveBot ? interactiveBot.telegram : ctx.telegram;
+
     try {
-      await ctx.telegram.sendPhoto(GROUP_ID_PHOTO_LOG, highestPhoto, {
+      await tg.sendPhoto(GROUP_ID_PHOTO_LOG, highestPhoto, {
         caption: photoCaption,
         parse_mode: 'HTML'
       });
+      console.log('✅ [Alker Log] Foto berhasil dikirim ke grup', GROUP_ID_PHOTO_LOG);
     } catch (err) {
-      console.warn('[Alker] Gagal kirim foto ke group log:', err.message);
+      console.warn('❌ [Alker Log] Gagal kirim foto ke group log:', err.message);
     }
   }
 
@@ -501,10 +505,12 @@ async function handleAlkerMessage(ctx) {
     `💡 <i>Mohon PIC Leader segera cek & tindak lanjuti alker teknisi bersangkutan.</i>`
   );
 
+  const tg = interactiveBot ? interactiveBot.telegram : ctx.telegram;
   try {
-    await ctx.telegram.sendMessage(GROUP_ID_LEADER_ALERT, alertText, { parse_mode: 'HTML' });
+    await tg.sendMessage(GROUP_ID_LEADER_ALERT, alertText, { parse_mode: 'HTML' });
+    console.log('✅ [Alker Alert] Notifikasi berhasil dikirim ke grup leader', GROUP_ID_LEADER_ALERT);
   } catch (err) {
-    console.warn('[Alker] Gagal kirim alert ke group leader:', err.message);
+    console.warn('❌ [Alker Alert] Gagal kirim alert ke group leader:', err.message);
   }
 
   sessions.delete(sessionKey);
