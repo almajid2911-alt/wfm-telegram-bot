@@ -744,9 +744,156 @@ async function saveAlkerStatusUpdate(ctx, { techName, techNik, sektor, alkerName
   }
 }
 
+/**
+ * Handler Perintah /rekapalker [sektor] & Callback Rekap Seluruh Alker
+ */
+async function handleRekapAlkerCommand(ctx, arg = '') {
+  const loadingMsg = await ctx.reply('⏳ <i>Sedang mengambil data rekapitulasi alker dari database...</i>', { parse_mode: 'HTML' });
+  const timeStr = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Makassar' }) + ' WITA';
+
+  try {
+    const rawTarget = (arg || '').toUpperCase().trim();
+    let sektorFilter = '';
+    if (['BATULICIN', 'BLC'].includes(rawTarget)) sektorFilter = 'BATULICIN';
+    else if (['SATUI', 'STI'].includes(rawTarget)) sektorFilter = 'SATUI';
+    else if (['KOTABARU', 'KTB'].includes(rawTarget)) sektorFilter = 'KOTABARU';
+
+    const getSectorGroup = (psa) => {
+      const p = (psa || '').toUpperCase().trim();
+      if (['SATUI', 'KINTAP', 'ALKAUTSAR', 'AL-KAUTSAR', 'PAGATAN', 'ANGSANA', 'SEBAMBAN', 'STI', 'KIP', 'PGT'].some(s => p.includes(s))) return 'SATUI';
+      if (['KOTABARU', 'KTB', 'LONTAR', 'LTR', 'STAGEN', 'KPL'].some(s => p.includes(s))) return 'KOTABARU';
+      return 'BATULICIN';
+    };
+
+    const [nakerRows, alkerRows] = await Promise.all([
+      getSheetRows(SPREADSHEET_ID, SHEET_NAKER, true),
+      getSheetRows(SPREADSHEET_ID, SHEET_ALKER, true)
+    ]);
+
+    // Map Techs with Sector
+    const techMap = new Map();
+    nakerRows.forEach(n => {
+      const name = String(n['NAMA'] || n['Nama'] || '').trim().toUpperCase();
+      if (name) {
+        techMap.set(name, {
+          name,
+          nik: String(n['NIK'] || '').trim(),
+          sektor: getSectorGroup(String(n['PSA'] || n['Sektor'] || '')),
+          wilsus: String(n['PSA'] || n['Sektor'] || 'BATULICIN').trim(),
+          leader: String(n['PIC LEADER'] || n['Leader'] || '-').trim()
+        });
+      }
+    });
+
+    let normalCount = 0;
+    let rusakCount = 0;
+    let missingCount = 0;
+    const troubleList = [];
+
+    alkerRows.forEach(row => {
+      const nameAlker = String(row['Nama Alker'] || row['NAMA ALKER'] || '').trim().toUpperCase();
+      if (nameAlker === 'BAJU') return;
+
+      const techName = String(row['Teknisi'] || row['TEKNISI'] || '').trim().toUpperCase();
+      const techInfo = techMap.get(techName) || { sektor: 'BATULICIN', wilsus: 'BATULICIN', leader: '-' };
+
+      if (sektorFilter && techInfo.sektor !== sektorFilter) {
+        return;
+      }
+
+      const st = String(row['Status'] || row['STATUS'] || 'Normal').trim().toLowerCase();
+      const sn = String(row['SN / ID Alker'] || row['ID Alker'] || '-').trim();
+      const ket = String(row['Keterangan'] || row['KETERANGAN'] || '-').trim();
+
+      if (st.includes('rusak')) {
+        rusakCount++;
+        troubleList.push({
+          techName,
+          sektor: techInfo.sektor,
+          wilsus: techInfo.wilsus,
+          alker: row['Nama Alker'] || row['NAMA ALKER'],
+          sn,
+          status: '🔴 Rusak',
+          keterangan: ket
+        });
+      } else if (st.includes('tidak') || st.includes('hilang')) {
+        missingCount++;
+        troubleList.push({
+          techName,
+          sektor: techInfo.sektor,
+          wilsus: techInfo.wilsus,
+          alker: row['Nama Alker'] || row['NAMA ALKER'],
+          sn,
+          status: '❌ Hilang',
+          keterangan: ket
+        });
+      } else {
+        normalCount++;
+      }
+    });
+
+    const totalAlker = normalCount + rusakCount + missingCount;
+    const titleSektor = sektorFilter ? `SEKTOR ${sektorFilter}` : 'SELURUH WILAYAH';
+
+    let card = `📊 <b>REKAPITULASI KONDISI ALKER TEKNISI</b>\n`;
+    card += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    card += `🏢 <b>Wilayah :</b> ${titleSektor}\n`;
+    card += `🕒 <b>Update  :</b> ${timeStr}\n\n`;
+    card += `📈 <b>Ringkasan Kondisi Alat:</b>\n`;
+    card += `  🟢 Normal / Berfungsi : <b>${normalCount}</b> item\n`;
+    card += `  🔴 Rusak              : <b>${rusakCount}</b> item\n`;
+    card += `  ❌ Tidak Ada / Hilang : <b>${missingCount}</b> item\n`;
+    card += `  📦 Total Terinventaris: <b>${totalAlker}</b> item\n`;
+    card += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+
+    if (troubleList.length > 0) {
+      card += `\n⚠️ <b>Daftar Alat Bermasalah (${troubleList.length} Item):</b>\n`;
+      troubleList.slice(0, 15).forEach((t, idx) => {
+        card += `${idx + 1}. ${t.status} <b>${escapeHtml(t.alker)}</b>\n`;
+        card += `   👷 <code>${escapeHtml(t.techName)}</code> [${t.wilsus}]\n`;
+        if (t.sn && t.sn !== '-') card += `   🔢 SN: <code>${escapeHtml(t.sn)}</code>\n`;
+        if (t.keterangan && t.keterangan !== '-') card += `   📝 Ket: <i>${escapeHtml(t.keterangan)}</i>\n`;
+      });
+
+      if (troubleList.length > 15) {
+        card += `\n<i>...dan ${troubleList.length - 15} item lainnya dapat dipantau di Web Dashboard.</i>\n`;
+      }
+    } else {
+      card += `\n✨ <i>Semua alat kerja terdata dalam kondisi Normal & Berfungsi Baik.</i>\n`;
+    }
+
+    const buttons = [
+      [
+        Markup.button.url('📊 Buka Dashboard Monitoring SPV', 'https://alker.103.93.129.213.sslip.io/dashboard'),
+        Markup.button.url('📱 Buka Form Checklist HP', 'https://alker.103.93.129.213.sslip.io/form')
+      ],
+      [
+        Markup.button.callback('🏢 Rekap Batulicin', 'rekap_alker_batulicin'),
+        Markup.button.callback('🏢 Rekap Satui', 'rekap_alker_satui')
+      ],
+      [
+        Markup.button.callback('🏢 Rekap Kotabaru', 'rekap_alker_kotabaru'),
+        Markup.button.callback('🌐 Rekap Semua', 'rekap_alker_all')
+      ]
+    ];
+
+    await ctx.deleteMessage(loadingMsg.message_id).catch(() => {});
+    return ctx.reply(card, {
+      parse_mode: 'HTML',
+      ...Markup.inlineKeyboard(buttons)
+    });
+
+  } catch (err) {
+    console.error('❌ [Rekap Alker Error]:', err);
+    await ctx.deleteMessage(loadingMsg.message_id).catch(() => {});
+    return ctx.reply(`⚠️ Gagal memuat rekap alker: ${escapeHtml(err.message)}`, { parse_mode: 'HTML' });
+  }
+}
+
 module.exports = {
   handleAlkerCommand,
   handleAlkerCallback,
   handleAlkerMessage,
+  handleRekapAlkerCommand,
   resolveTechnician
 };
