@@ -99,10 +99,17 @@ async function handleInseraCommand(ctx, rawTicket) {
   try {
     const rows = await getSheetRows(SPREADSHEET_ID, SHEET_NAME);
     
-    // Find matching incident
+    // Find matching incident accurately
     const match = rows.find(r => {
-      const inc = (r.INCIDENT || r.Incident || r.incident || '').toString().trim().toUpperCase();
-      return inc === searchedTicket || inc.includes(searchedTicket) || searchedTicket.includes(inc);
+      for (const k in r) {
+        if (k.toLowerCase().includes('incident') || k.toLowerCase().includes('ticket')) {
+          const val = String(r[k] || '').trim().toUpperCase();
+          if (val && (val === searchedTicket || val.includes(searchedTicket))) {
+            return true;
+          }
+        }
+      }
+      return false;
     });
 
     if (!match) {
@@ -111,30 +118,43 @@ async function handleInseraCommand(ctx, rawTicket) {
 
     const getVal = (keyNames) => {
       for (const k of keyNames) {
-        if (match[k] !== undefined && match[k] !== null && match[k] !== '') {
-          return match[k].toString().trim();
-        }
+        const kLower = k.toLowerCase().trim();
+        // 1. Exact match
         for (const realKey in match) {
-          if (realKey.toLowerCase() === k.toLowerCase() && match[realKey] !== undefined && match[realKey] !== null && match[realKey] !== '') {
-            return match[realKey].toString().trim();
+          const rkLower = realKey.toLowerCase().trim();
+          if (rkLower === kLower) {
+            const val = match[realKey];
+            if (val !== undefined && val !== null && String(val).trim() !== '') {
+              return String(val).trim();
+            }
+          }
+        }
+        // 2. Prefix & Substring match (e.g. 'SUMMARY ...', 'REPORTED DATE ...', 'SERVICE NO ...')
+        for (const realKey in match) {
+          const rkLower = realKey.toLowerCase().trim();
+          if (rkLower.startsWith(kLower + ' ') || rkLower.startsWith(kLower + '_') || rkLower.startsWith(kLower + ':') || rkLower.includes(kLower)) {
+            const val = match[realKey];
+            if (val !== undefined && val !== null && String(val).trim() !== '') {
+              return String(val).trim();
+            }
           }
         }
       }
       return '';
     };
 
-    const incident = getVal(['INCIDENT', 'Incident']) || searchedTicket;
-    const rawContactPhone = getVal(['CONTACT PHONE', 'Contact Phone', 'CONTACT_PHONE']) || '-';
-    const serviceNo = getVal(['SERVICE NO', 'Service No', 'SERVICE_NO']) || '-';
-    const reportedDate = escapeMarkdown(getVal(['REPORTED DATE', 'Reported Date', 'REPORTED_DATE']) || '-');
+    const incident = getVal(['INCIDENT', 'Incident', 'TICKET ID']) || searchedTicket;
+    const rawContactPhone = getVal(['CONTACT PHONE', 'Contact Phone', 'CONTACT_PHONE', 'CUSTOMER CATEGORY', 'CP']) || '-';
+    const serviceNo = getVal(['SERVICE NO', 'Service No', 'SERVICE_NO', 'SERVICE ID']) || '-';
+    const reportedDate = escapeMarkdown(getVal(['REPORTED DATE', 'Reported Date', 'REPORTED_DATE', 'STATUS DATE']) || '-');
 
-    let contactName = getVal(['CONTACT NAME', 'Contact Name', 'Customer Name', 'CUSTOMER NAME']) || '-';
+    let contactName = getVal(['CUSTOMER NAME', 'Customer Name', 'CUSTOMER_NAME', 'CONTACT NAME', 'Contact Name']) || '-';
     contactName = escapeMarkdown(contactName.toUpperCase());
 
-    let customerType = getVal(['CUSTOMER TYPE', 'Customer Type', 'CUSTOMER_TYPE', 'Segment', 'SEGMENT']) || '-';
+    let customerType = getVal(['CUSTOMER TYPE', 'Customer Type', 'CUSTOMER_TYPE', 'CUSTOMER SEGMENT', 'Segment', 'SEGMENT']) || '-';
     customerType = escapeMarkdown(customerType.toUpperCase());
 
-    const rawSummary = getVal(['SUMMARY', 'Summary', 'DESCRIPTION', 'Description']) || '';
+    const rawSummary = getVal(['SUMMARY', 'Summary', 'DESCRIPTION', 'Description', 'WORKLOG SUMMARY', 'SYMPTOM']) || '';
     const summary = escapeMarkdown(rawSummary || '-');
 
     const bookingDate = getVal(['BOOKING DATE', 'Booking Date', 'BOOKING_DATE', 'Booking_Date']);
@@ -142,7 +162,7 @@ async function handleInseraCommand(ctx, rawTicket) {
     const descAssign = getVal(['DESCRIPTION ASSIGMENT', 'Description Assignment', 'DESCRIPTION_ASSIGNMENT', 'DESCRIPTION ASSIGNMENT', 'Description Assigment']);
     const manjaInfo = parseManjaInfo(bookingDate, jamManja, descAssign, rawSummary);
 
-    let deviceName = getVal(['DEVICE NAME', 'Device Name', 'DEVICE_NAME', 'ODC', 'odc']);
+    let deviceName = getVal(['DEVICE NAME', 'Device Name', 'DEVICE_NAME', 'ODC', 'odc', 'RK INFORMATION']);
     if (!deviceName && rawSummary) {
       const odpMatch = rawSummary.match(/\b(ODP-[A-Za-z0-9\-/_]+(?:\s+[A-Za-z0-9\-/\.]+)?)\b/i);
       if (odpMatch) deviceName = odpMatch[1].toUpperCase();
@@ -150,7 +170,7 @@ async function handleInseraCommand(ctx, rawTicket) {
     if (!deviceName) deviceName = '-';
 
     // Ekstrak dan bersihkan nomor HP (deduplikasi nomor ganda)
-    const phoneList = extractPhoneNumbers(rawContactPhone);
+    const phoneList = extractPhoneNumbers(rawContactPhone + ' ' + rawSummary);
     const displayPhone = phoneList.length > 0 ? phoneList.join(' / ') : rawContactPhone;
 
     let msg = '📌 *DETAIL TIKET GANGGUAN*\n';
