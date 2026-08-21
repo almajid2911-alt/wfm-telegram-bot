@@ -66,8 +66,11 @@ function renderAlkerFormHtml() {
       </div>
 
       <!-- Sektor Buttons -->
-      <div class="grid grid-cols-3 gap-2" id="sektorButtonGroup">
-        <button type="button" onclick="selectSector('BATULICIN')" id="btnSektor_BATULICIN" class="sektor-btn py-2 px-1 rounded-xl text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition">
+      <div class="grid grid-cols-4 gap-1.5" id="sektorButtonGroup">
+        <button type="button" onclick="selectSector('ALL')" id="btnSektor_ALL" class="sektor-btn py-2 px-1 rounded-xl text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition">
+          🌐 Semua
+        </button>
+        <button type="button" onclick="selectSector('BATULICIN')" id="btnSektor_BATULICIN" class="sektor-btn py-2 px-1 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700/80 transition">
           🏢 Batulicin
         </button>
         <button type="button" onclick="selectSector('SATUI')" id="btnSektor_SATUI" class="sektor-btn py-2 px-1 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700/80 transition">
@@ -186,7 +189,7 @@ function renderAlkerFormHtml() {
 
   <script>
     let allTechs = [];
-    let currentSector = 'BATULICIN';
+    let currentSector = 'ALL';
     let currentTech = null;
     let currentAlkers = [];
     let isSecurityVerified = false;
@@ -198,17 +201,24 @@ function renderAlkerFormHtml() {
     const paramNik = urlParams.get('nik') || '';
     const paramSektor = (urlParams.get('sektor') || '').toUpperCase();
 
+    function getSectorGroup(psa) {
+      const p = (psa || '').toUpperCase().trim();
+      if (['SATUI', 'KINTAP', 'STI', 'KIP'].some(s => p.includes(s))) return 'SATUI';
+      if (['KOTABARU', 'KTB', 'SERONGGA', 'SER', 'LONTAR', 'LTR', 'CANTUNG', 'SUNGAI DURIAN', 'TARJUN', 'BAKAU', 'AL-KAUTSAR', 'KPL', 'STAGEN'].some(s => p.includes(s))) return 'KOTABARU';
+      return 'BATULICIN';
+    }
+
     async function loadInitialData() {
       try {
         const res = await fetch('/api/alker/techs');
         const json = await res.json();
-        if (json.success && json.data) {
+        if (json.success && json.data && json.data.length > 0) {
           allTechs = json.data;
           
           if (paramSektor && ['BATULICIN', 'SATUI', 'KOTABARU'].includes(paramSektor)) {
             selectSector(paramSektor);
           } else {
-            selectSector('BATULICIN');
+            selectSector('ALL');
           }
 
           // Auto select if query params provided
@@ -218,20 +228,24 @@ function renderAlkerFormHtml() {
               (paramTech && t.name.toLowerCase().includes(paramTech.toLowerCase()))
             );
             if (found) {
-              selectSector(found.sektor);
+              const sec = getSectorGroup(found.sektor);
+              selectSector(sec);
               document.getElementById('techSelect').value = found.name;
               onTechSelected();
             }
           }
+        } else {
+          document.getElementById('techSelect').innerHTML = '<option value="">-- Gagal memuat data dari server --</option>';
         }
       } catch (err) {
         console.error('Failed loading tech list:', err);
+        document.getElementById('techSelect').innerHTML = '<option value="">-- Error koneksi server --</option>';
       }
     }
 
     function selectSector(sektor) {
       currentSector = sektor;
-      document.getElementById('badgeSektor').innerText = 'SEKTOR ' + sektor;
+      document.getElementById('badgeSektor').innerText = sektor === 'ALL' ? 'SEMUA SEKTOR' : 'SEKTOR ' + sektor;
       document.querySelectorAll('.sektor-btn').forEach(b => {
         b.className = 'sektor-btn py-2 px-1 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700/80 transition';
       });
@@ -241,16 +255,19 @@ function renderAlkerFormHtml() {
       }
 
       // Populate Tech Dropdown
-      const select = document.getElementById('techSelect');
-      const filtered = allTechs.filter(t => (t.sektor || 'BATULICIN').toUpperCase() === sektor);
+      let filtered = allTechs;
+      if (sektor !== 'ALL') {
+        filtered = allTechs.filter(t => getSectorGroup(t.sektor) === sektor || (t.sektor && t.sektor.toUpperCase().includes(sektor)));
+      }
 
+      const select = document.getElementById('techSelect');
       if (!filtered.length) {
         select.innerHTML = '<option value="">-- Tidak ada teknisi di sektor ini --</option>';
         return;
       }
 
-      select.innerHTML = '<option value="">-- Pilih Nama Anda --</option>' + 
-        filtered.map(t => \`<option value="\${t.name}">\${t.name} (NIK: \${t.nik})</option>\`).join('');
+      select.innerHTML = '<option value="">-- Pilih Nama Teknisi (' + filtered.length + ' Orang) --</option>' + 
+        filtered.map(t => \`<option value="\${t.name}">[\${t.sektor || 'BLC'}] \${t.name} (NIK: \${t.nik})</option>\`).join('');
     }
 
     async function onTechSelected() {
