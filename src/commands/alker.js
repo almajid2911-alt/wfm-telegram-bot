@@ -5,7 +5,7 @@ const SPREADSHEET_ID = process.env.SPREADSHEET_ALKER_ID || '1Vk5RsTMxAJDI71SAo_7
 const SHEET_ALKER = 'DataAlker';
 const SHEET_TEKNISI = 'DataTeknisi';
 const SHEET_NAKER = 'NAKER';
-const WEBHOOK_URL = process.env.ALKER_WEBHOOK_URL || process.env.GOOGLE_SCRIPT_ALKER_URL || '';
+const WEBHOOK_URL = process.env.ALKER_WEBHOOK_URL || process.env.GOOGLE_SCRIPT_ALKER_URL || 'https://script.google.com/macros/s/AKfycbyTvKaqyjYSLXQgpYvNqA1X9oBVQzGbmfNb-ZcDiQy5_mhca6KEuYdqyvO4j3aRAW6y/exec';
 
 // In-Memory Sessions
 const sessions = new Map();
