@@ -143,14 +143,24 @@ async function handleAlkerCommand(ctx, rawArgs = '') {
           { parse_mode: 'HTML' }
         );
       }
+
+      const sectorKeyboard = Markup.inlineKeyboard([
+        [
+          Markup.button.callback('🏢 Sektor Batulicin', 'alker_sektor_batulicin'),
+          Markup.button.callback('🏢 Sektor Satui', 'alker_sektor_satui')
+        ],
+        [
+          Markup.button.callback('🏢 Sektor Kotabaru', 'alker_sektor_kotabaru'),
+          Markup.button.callback('📊 Rekap Seluruh Alker', 'rekap_alker_all')
+        ]
+      ]);
+
       return ctx.reply(
-        `🛠️ <b>MONITORING ALKER TEKNISI</b>\n` +
+        `🛠️ <b>PILIH WILAYAH / NAMA TEKNISI ALKER</b>\n` +
         `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `ID Telegram Anda belum terhubung otomatis dengan NIK Anda.\n\n` +
-        `Silakan ketik <b>NIK</b> Anda:\n` +
-        `👉 Contoh: <code>/alker 25830030</code>\n` +
-        `👉 Atau cari NIK lainnya: <code>/alker &lt;NIK&gt;</code>`,
-        { parse_mode: 'HTML' }
+        `Silakan pilih <b>Sektor Wilayah</b> Anda di bawah untuk memilih nama teknisi:\n\n` +
+        `💡 <i>Atau langsung ketik NIK / Nama Anda:\n👉 Contoh: <code>/alker 25830030</code> atau <code>/alker ARIF</code></i>`,
+        { parse_mode: 'HTML', ...sectorKeyboard }
       );
     }
 
@@ -233,6 +243,83 @@ async function handleAlkerCallback(ctx) {
     await ctx.answerCbQuery('Dibatalkan').catch(() => {});
     await ctx.editMessageText('❌ <i>Proses update alker dibatalkan.</i>', { parse_mode: 'HTML' }).catch(() => {});
     return true;
+  }
+
+  // SEKTOR SELECTION (BATULICIN / SATUI / KOTABARU)
+  if (data.startsWith('alker_sektor_')) {
+    const sektorTarget = data.replace('alker_sektor_', '').toUpperCase();
+    await ctx.answerCbQuery(`Memuat teknisi ${sektorTarget}...`).catch(() => {});
+    
+    try {
+      const nakerRows = await getSheetRows(SPREADSHEET_ID, SHEET_NAKER, true);
+      const filtered = nakerRows.filter(r => {
+        const psa = String(r['PSA'] || r['psa'] || '').trim().toUpperCase();
+        return psa === sektorTarget || psa.includes(sektorTarget);
+      });
+
+      if (!filtered.length) {
+        return ctx.reply(`⚠️ Tidak ada data teknisi untuk sektor ${sektorTarget}.`);
+      }
+
+      const techButtons = [];
+      for (let i = 0; i < filtered.length; i += 2) {
+        const rowBtns = [];
+        const t1 = filtered[i];
+        const name1 = String(t1['NAMA'] || t1['Nama'] || '').trim();
+        const nik1 = String(t1['NIK'] || '').trim();
+        if (name1) {
+          rowBtns.push(Markup.button.callback(`👤 ${name1.slice(0, 16)}`, `alker_pick_${encodeURIComponent(nik1 || name1)}`));
+        }
+        if (i + 1 < filtered.length) {
+          const t2 = filtered[i + 1];
+          const name2 = String(t2['NAMA'] || t2['Nama'] || '').trim();
+          const nik2 = String(t2['NIK'] || '').trim();
+          if (name2) {
+            rowBtns.push(Markup.button.callback(`👤 ${name2.slice(0, 16)}`, `alker_pick_${encodeURIComponent(nik2 || name2)}`));
+          }
+        }
+        techButtons.push(rowBtns);
+      }
+
+      techButtons.push([
+        Markup.button.callback('⬅️ Kembali Pilih Wilayah', 'alker_back_sektor')
+      ]);
+
+      return ctx.editMessageText(
+        `🏢 <b>DAFTAR TEKNISI SEKTOR ${sektorTarget}</b>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `Silakan klik nama Anda untuk membuka status inventaris Alker:`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard(techButtons) }
+      );
+    } catch (err) {
+      return ctx.reply(`❌ Gagal memuat daftar teknisi: ${err.message}`);
+    }
+  }
+
+  if (data === 'alker_back_sektor') {
+    await ctx.answerCbQuery().catch(() => {});
+    const sectorKeyboard = Markup.inlineKeyboard([
+      [
+        Markup.button.callback('🏢 Sektor Batulicin', 'alker_sektor_batulicin'),
+        Markup.button.callback('🏢 Sektor Satui', 'alker_sektor_satui')
+      ],
+      [
+        Markup.button.callback('🏢 Sektor Kotabaru', 'alker_sektor_kotabaru'),
+        Markup.button.callback('📊 Rekap Seluruh Alker', 'rekap_alker_all')
+      ]
+    ]);
+    return ctx.editMessageText(
+      `🛠️ <b>PILIH WILAYAH / NAMA TEKNISI ALKER</b>\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `Silakan pilih <b>Sektor Wilayah</b> Anda di bawah untuk memilih nama teknisi:`,
+      { parse_mode: 'HTML', ...sectorKeyboard }
+    );
+  }
+
+  if (data.startsWith('alker_pick_')) {
+    const query = decodeURIComponent(data.replace('alker_pick_', ''));
+    await ctx.answerCbQuery(`Membuka alker ${query}...`).catch(() => {});
+    return handleAlkerCommand(ctx, query);
   }
 
   // MASS CONFIRMATION (Tidak Ada Perubahan Minggu Ini)

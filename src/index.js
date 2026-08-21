@@ -217,12 +217,16 @@ if (interactiveBot) {
     if (handledByAlker) return;
 
     const text = (ctx.message.text || ctx.message.caption || '').trim();
-    if (!text || text.startsWith('/')) return next();
-
-    const incMatch = text.match(/^\s*(INC?\d+)\b/i);
-    if (incMatch) return handleInseraCommand(ctx, incMatch[1]);
-    const bimaMatch = text.match(/^\s*(AO\w+|1\d+|TI\w+|SC\w+|MO\w+|PD\w+)\b/i);
-    if (bimaMatch) return handleBimaCommand(ctx, bimaMatch[1]);
+    const incMatch = text.match(/\b(INC\d{5,12})\b/i);
+    if (incMatch) {
+      console.log(`[Auto-Detect] INC detected in text: ${incMatch[1]}`);
+      return handleInseraCommand(ctx, incMatch[1]);
+    }
+    const bimaMatch = text.match(/\b(AO\w+|1\d{10,12}|TI\w+|SC\d+|MO\w+|PD\w+)\b/i);
+    if (bimaMatch) {
+      console.log(`[Auto-Detect] BIMA/Order detected in text: ${bimaMatch[1]}`);
+      return handleBimaCommand(ctx, bimaMatch[1]);
+    }
     return next();
   });
 }
