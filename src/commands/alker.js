@@ -273,10 +273,17 @@ async function handleAlkerCallback(ctx) {
     await ctx.answerCbQuery(`Memuat teknisi ${sektorTarget}...`).catch(() => {});
     
     try {
+      const getSectorGroup = (psa) => {
+        const p = (psa || '').toUpperCase().trim();
+        if (['SATUI', 'KINTAP', 'ALKAUTSAR', 'AL-KAUTSAR', 'PAGATAN', 'ANGSANA', 'SEBAMBAN', 'STI', 'KIP', 'PGT'].some(s => p.includes(s))) return 'SATUI';
+        if (['KOTABARU', 'KTB', 'LONTAR', 'LTR', 'STAGEN', 'KPL'].some(s => p.includes(s))) return 'KOTABARU';
+        return 'BATULICIN';
+      };
+
       const nakerRows = await getSheetRows(SPREADSHEET_ID, SHEET_NAKER, true);
       const filtered = nakerRows.filter(r => {
         const psa = String(r['PSA'] || r['psa'] || '').trim().toUpperCase();
-        return psa === sektorTarget || psa.includes(sektorTarget);
+        return getSectorGroup(psa) === sektorTarget || psa === sektorTarget;
       });
 
       if (!filtered.length) {

@@ -203,8 +203,15 @@ function renderAlkerFormHtml() {
 
     function getSectorGroup(psa) {
       const p = (psa || '').toUpperCase().trim();
-      if (['SATUI', 'KINTAP', 'STI', 'KIP'].some(s => p.includes(s))) return 'SATUI';
-      if (['KOTABARU', 'KTB', 'SERONGGA', 'SER', 'LONTAR', 'LTR', 'CANTUNG', 'SUNGAI DURIAN', 'TARJUN', 'BAKAU', 'AL-KAUTSAR', 'KPL', 'STAGEN'].some(s => p.includes(s))) return 'KOTABARU';
+      // SATUI: Satui, Kintap, Alkautsar, Pagatan, Angsana, Sebamban
+      if (['SATUI', 'KINTAP', 'ALKAUTSAR', 'AL-KAUTSAR', 'PAGATAN', 'ANGSANA', 'SEBAMBAN', 'STI', 'KIP', 'PGT'].some(s => p.includes(s))) {
+        return 'SATUI';
+      }
+      // KOTABARU: Kotabaru, Lontar, Stagen
+      if (['KOTABARU', 'KTB', 'LONTAR', 'LTR', 'STAGEN', 'KPL'].some(s => p.includes(s))) {
+        return 'KOTABARU';
+      }
+      // BATULICIN: Batulicin, Serongga, Cantung, Sungai Durian, Tarjun, Bakau, Batu Besar, Mantewe
       return 'BATULICIN';
     }
 
