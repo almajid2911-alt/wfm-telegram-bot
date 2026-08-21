@@ -15,7 +15,7 @@ const runFfg = require('./schedulers/ffg');
 const runTiketPenting = require('./schedulers/tiketPenting');
 const runPoMaterial = require('./schedulers/poMaterial');
 const runPotensiGaulReminder = require('./schedulers/potensiGaul');
-const { runWeeklyAlkerReminder, handleBroadcastAlkerCommand } = require('./schedulers/alkerReminder');
+const { runWeeklyAlkerReminder, reportOverdueComplianceToLeaders, handleBroadcastAlkerCommand } = require('./schedulers/alkerReminder');
 
 // Interactive Handlers
 const { handleRekonCommand, handleValinsCommand } = require('./commands/rekon');
@@ -61,7 +61,9 @@ cron.schedule('41 8-23 * * *',       () => runTiketPenting(),         { timezone
 // cron.schedule('0 8,16 * * *',        () => runPoMaterial(),           { timezone: TIMEZONE }); // Disabled temporarily
 cron.schedule('19 8,10,12,14,16,18,20 * * *', () => runPotensiGaulReminder(), { timezone: TIMEZONE });
 // Reminder mingguan cek & update alker setiap Senin jam 08:00 WITA
-cron.schedule('0 8 * * 1', () => runWeeklyAlkerReminder(interactiveBot), { timezone: TIMEZONE });
+cron.schedule('0 8 * * 1',  () => runWeeklyAlkerReminder(interactiveBot), { timezone: TIMEZONE });
+// Laporan kepatuhan alker ke grup Leader (> 14 hari belum update) setiap Senin jam 08:30 WITA
+cron.schedule('30 8 * * 1', () => reportOverdueComplianceToLeaders(interactiveBot), { timezone: TIMEZONE });
 
 console.log(`✅ [Schedulers] Active cron jobs registered (timezone: ${TIMEZONE})`);
 
@@ -178,6 +180,11 @@ if (interactiveBot) {
   });
   interactiveBot.command('broadcastalker', (ctx) => handleBroadcastAlkerCommand(ctx));
   interactiveBot.command('remindalker',    (ctx) => handleBroadcastAlkerCommand(ctx));
+  interactiveBot.command('cekcompliance',  async (ctx) => {
+    await ctx.reply('🔍 <i>Mengecek kepatuhan alker dan mengirim laporan ke grup leader...</i>', { parse_mode: 'HTML' });
+    await reportOverdueComplianceToLeaders(ctx.telegram);
+    await ctx.reply('✅ <i>Pengecekan selesai! Laporan telah dikirim ke Grup Leader.</i>', { parse_mode: 'HTML' });
+  });
 
   // Callback Query (Tombol Sektor, Unspec & Alker)
   interactiveBot.action('map_batulicin', (ctx) => { ctx.answerCbQuery().catch(() => {}); handleMappingCommand(ctx, 'batulicin'); });

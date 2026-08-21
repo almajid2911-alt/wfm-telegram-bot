@@ -6,6 +6,10 @@ const SHEET_ALKER = 'DataAlker';
 const SHEET_NAKER = 'NAKER';
 const WEBHOOK_URL = process.env.ALKER_WEBHOOK_URL || process.env.GOOGLE_SCRIPT_ALKER_URL || 'https://script.google.com/macros/s/AKfycbyTvKaqyjYSLXQgpYvNqA1X9oBVQzGbmfNb-ZcDiQy5_mhca6KEuYdqyvO4j3aRAW6y/exec';
 
+// Group IDs
+const GROUP_ID_PHOTO_LOG = '-1003368989739'; // Group foto bukti kerusakan
+const GROUP_ID_LEADER_ALERT = '-4945019710';  // Group alert SPV & Leader
+
 // In-Memory Sessions
 const sessions = new Map();
 const SESSION_TTL_MS = 15 * 60 * 1000;
@@ -35,7 +39,7 @@ const escapeHtml = (str) => {
 };
 
 /**
- * Cari teknisi berdasarkan NIK (Prioritas Utama), Telegram ID, atau Nama
+ * Cari teknisi berdasarkan NIK, Telegram ID, atau Nama
  */
 async function resolveTechnician(userId, query = '') {
   try {
@@ -44,7 +48,6 @@ async function resolveTechnician(userId, query = '') {
 
     const cleanQuery = (query || '').trim();
 
-    // 1. Jika ada query, cari berdasarkan NIK terlebih dahulu
     if (cleanQuery) {
       const matchNik = nakerRows.find(r => {
         const nik = String(r['NIK'] || r['nik'] || '').trim();
@@ -60,7 +63,6 @@ async function resolveTechnician(userId, query = '') {
         };
       }
 
-      // 2. Fallback pencarian berdasarkan Nama jika query bukan NIK
       const matchName = nakerRows.find(r => {
         const name = String(r['NAMA'] || r['Nama'] || '').trim().toUpperCase();
         return name && name.includes(cleanQuery.toUpperCase());
@@ -78,7 +80,6 @@ async function resolveTechnician(userId, query = '') {
       return null;
     }
 
-    // 3. Jika tanpa query, cocokkan dengan Telegram User ID pengirim
     if (userId) {
       const userStr = String(userId).trim();
       const matchTg = nakerRows.find(r => {
@@ -181,6 +182,7 @@ async function handleAlkerCommand(ctx, rawArgs = '') {
       techName,
       techNik,
       sektor: tech.sektor,
+      leader: tech.leader,
       alkers,
       step: 'IDLE',
       timestamp: Date.now()
@@ -197,10 +199,11 @@ async function handleAlkerCommand(ctx, rawArgs = '') {
     card += `  🔴 Rusak    : <b>${countRusak}</b> item\n`;
     card += `  ❌ Tidak Ada: <b>${countMissing}</b> item\n`;
     card += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-    card += `👇 <i>Pilih menu di bawah untuk melihat rincian atau update kondisi alker:</i>`;
+    card += `👇 <i>Pilih tombol cepat jika semua alat aman, atau klik rincian untuk update alat tertentu:</i>`;
 
     const buttons = [
-      [Markup.button.callback('📝 Rincian & Update Alker', 'alker_list_items')],
+      [Markup.button.callback('✅ Tidak Ada Perubahan (Semua Aman)', 'alker_mass_confirm')],
+      [Markup.button.callback('📝 Rincian & Update Per Alat', 'alker_list_items')],
       [Markup.button.callback('🔄 Refresh Data', `alker_refresh_${encodeURIComponent(techNik || techName)}`)]
     ];
 
@@ -229,6 +232,51 @@ async function handleAlkerCallback(ctx) {
     await ctx.answerCbQuery('Dibatalkan').catch(() => {});
     await ctx.editMessageText('❌ <i>Proses update alker dibatalkan.</i>', { parse_mode: 'HTML' }).catch(() => {});
     return true;
+  }
+
+  // MASS CONFIRMATION (Tidak Ada Perubahan Minggu Ini)
+  if (data === 'alker_mass_confirm') {
+    if (!session) {
+      await ctx.answerCbQuery('Sesi telah kedaluwarsa. Silakan ketik /alker kembali.').catch(() => {});
+      return true;
+    }
+
+    await ctx.answerCbQuery('Menyimpan konfirmasi alker...').catch(() => {});
+    const loading = await ctx.reply('⏳ <i>Menyimpan update mingguan alker...</i>', { parse_mode: 'HTML' });
+
+    try {
+      if (WEBHOOK_URL) {
+        await fetch(WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'mass_confirm_alker',
+            technicianName: session.techName
+          })
+        });
+      }
+
+      await ctx.deleteMessage(loading.message_id).catch(() => {});
+      const timeStr = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Makassar' }) + ' WITA';
+
+      const successCard = (
+        `✅ <b>KONFIRMASI ALKER MINGGU INI BERHASIL!</b>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `👤 <b>Teknisi :</b> ${escapeHtml(session.techName)} (${session.techNik})\n` +
+        `🏢 <b>Sektor  :</b> ${escapeHtml(session.sektor)}\n` +
+        `📦 <b>Kondisi :</b> Semua 18 Alker tercatat <b>Aman / Sesuai</b>\n` +
+        `🕒 <b>Waktu   :</b> ${timeStr}\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `💡 <i>Status kepatuhan mingguan Anda telah diperbarui di Web Dashboard SPV.</i>`
+      );
+
+      sessions.delete(sessionKey);
+      return ctx.reply(successCard, { parse_mode: 'HTML' });
+
+    } catch (err) {
+      await ctx.deleteMessage(loading.message_id).catch(() => {});
+      return ctx.reply(`⚠️ Gagal menyimpan konfirmasi: ${escapeHtml(err.message)}`, { parse_mode: 'HTML' });
+    }
   }
 
   if (data === 'alker_back_main') {
@@ -338,6 +386,7 @@ async function handleAlkerCallback(ctx) {
     await saveAlkerStatusUpdate(ctx, {
       techName: session.techName,
       techNik: session.techNik,
+      sektor: session.sektor,
       alkerName: item['Nama Alker'] || item['NAMA ALKER'],
       idAlker: item['SN / ID Alker'] || item['ID Alker'] || '',
       status: 'Normal',
@@ -359,17 +408,18 @@ async function handleAlkerCallback(ctx) {
 
     await ctx.answerCbQuery().catch(() => {});
 
-    // Hilangkan template tombol, hanya tombol Batalkan
     const buttons = [
       [Markup.button.callback('❌ Batalkan', 'alker_cancel')]
     ];
 
     await ctx.editMessageText(
-      `⚠️ <b>MASUKKAN KETERANGAN ${targetStatus.toUpperCase()}</b>\n` +
+      `⚠️ <b>MASUKKAN KETERANGAN ${targetStatus.toUpperCase()} & FOTO</b>\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
       `📦 <b>Alat:</b> ${escapeHtml(item['Nama Alker'] || item['NAMA ALKER'])}\n` +
       `👤 <b>Teknisi:</b> ${escapeHtml(session.techName)} (${session.techNik})\n\n` +
-      `Silakan <b>ketik pesan balasan langsung</b> untuk menjelaskan alasan / detail kerusakannya (contoh: <i>baterai drop tidak bisa dicas, kabel putus, layar retak, dll</i>):`,
+      `Silakan kirim balasan:\n` +
+      `📷 <b>Kirim Foto Fisik Alat</b> (dengan keterangan di caption), ATAU\n` +
+      `✍️ <b>Ketik Pesan Teks</b> alasan kerusakannya secara manual:`,
       {
         parse_mode: 'HTML',
         ...Markup.inlineKeyboard(buttons)
@@ -382,7 +432,7 @@ async function handleAlkerCallback(ctx) {
 }
 
 /**
- * Handler Input Pesan Teks untuk Keterangan Manual
+ * Handler Input Pesan Teks & Foto dari Teknisi
  */
 async function handleAlkerMessage(ctx) {
   const sessionKey = getSessionKey(ctx);
@@ -390,21 +440,72 @@ async function handleAlkerMessage(ctx) {
 
   if (!session || session.step !== 'WAITING_KETERANGAN') return false;
 
-  const text = (ctx.message.text || '').trim();
+  const isPhoto = !!(ctx.message.photo && ctx.message.photo.length > 0);
+  const text = (ctx.message.text || ctx.message.caption || '').trim();
+
   if (text.toLowerCase() === '/cancel' || text.toLowerCase() === 'batal') {
     sessions.delete(sessionKey);
     await ctx.reply('❌ <b>Update alker dibatalkan.</b>', { parse_mode: 'HTML' });
     return true;
   }
 
+  const alkerName = session.selectedItem['Nama Alker'] || session.selectedItem['NAMA ALKER'];
+  const sn = session.selectedItem['SN / ID Alker'] || session.selectedItem['ID Alker'] || '-';
+  const finalKet = text || (isPhoto ? 'Foto bukti terlampir di grup log' : 'Rusak fisik di lapangan');
+
   const dataToSave = {
     techName: session.techName,
     techNik: session.techNik,
-    alkerName: session.selectedItem['Nama Alker'] || session.selectedItem['NAMA ALKER'],
-    idAlker: session.selectedItem['SN / ID Alker'] || session.selectedItem['ID Alker'] || '',
+    sektor: session.sektor,
+    alkerName: alkerName,
+    idAlker: sn !== '-' ? sn : '',
     status: session.targetStatus || 'Rusak',
-    keterangan: text
+    keterangan: finalKet
   };
+
+  // 1. Jika ada foto, kirimkan foto ke Group Foto Log (-1003368989739)
+  if (isPhoto) {
+    const highestPhoto = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+    const photoCaption = (
+      `📸 <b>BUKTI KONDISI ALKER RUSAK / BERMASALAH</b>\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `👤 <b>Teknisi :</b> ${escapeHtml(session.techName)} (${session.techNik})\n` +
+      `🏢 <b>Sektor  :</b> ${escapeHtml(session.sektor)}\n` +
+      `📦 <b>Alat    :</b> ${escapeHtml(alkerName)} (SN: ${escapeHtml(sn)})\n` +
+      `📌 <b>Status  :</b> 🔴 <b>${escapeHtml(session.targetStatus || 'Rusak')}</b>\n` +
+      `📝 <b>Catatan :</b> ${escapeHtml(finalKet)}\n` +
+      `🕒 <b>Waktu   :</b> ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Makassar' })} WITA`
+    );
+
+    try {
+      await ctx.telegram.sendPhoto(GROUP_ID_PHOTO_LOG, highestPhoto, {
+        caption: photoCaption,
+        parse_mode: 'HTML'
+      });
+    } catch (err) {
+      console.warn('[Alker] Gagal kirim foto ke group log:', err.message);
+    }
+  }
+
+  // 2. Kirim Notifikasi Teks Alert ke Group SPV & Leader (-4945019710)
+  const alertText = (
+    `🚨 <b>ALERT ALKER BERMASALAH LAPANGAN</b>\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `👤 <b>Teknisi :</b> ${escapeHtml(session.techName)} (${session.techNik})\n` +
+    `🏢 <b>Sektor  :</b> ${escapeHtml(session.sektor)}\n` +
+    `📦 <b>Alat    :</b> ${escapeHtml(alkerName)} (SN: ${escapeHtml(sn)})\n` +
+    `📌 <b>Status  :</b> 🔴 <b>${escapeHtml(session.targetStatus || 'Rusak')}</b>\n` +
+    `📝 <b>Alasan  :</b> ${escapeHtml(finalKet)}\n` +
+    `🕒 <b>Waktu   :</b> ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Makassar' })} WITA\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `💡 <i>Mohon PIC Leader segera cek & tindak lanjuti alker teknisi bersangkutan.</i>`
+  );
+
+  try {
+    await ctx.telegram.sendMessage(GROUP_ID_LEADER_ALERT, alertText, { parse_mode: 'HTML' });
+  } catch (err) {
+    console.warn('[Alker] Gagal kirim alert ke group leader:', err.message);
+  }
 
   sessions.delete(sessionKey);
   await saveAlkerStatusUpdate(ctx, dataToSave);
@@ -412,15 +513,15 @@ async function handleAlkerMessage(ctx) {
 }
 
 /**
- * Kirim Payload ke Google Apps Script Webhook untuk Update Atomic
+ * Simpan Payload ke Google Apps Script Webhook
  */
-async function saveAlkerStatusUpdate(ctx, { techName, techNik, alkerName, idAlker, status, keterangan }) {
+async function saveAlkerStatusUpdate(ctx, { techName, techNik, sektor, alkerName, idAlker, status, keterangan }) {
   const loadingMsg = await ctx.reply('⏳ <i>Sedang menyimpan status ke database...</i>', { parse_mode: 'HTML' });
   const timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Makassar' }) + ' WITA';
 
   try {
     if (WEBHOOK_URL) {
-      const resp = await fetch(WEBHOOK_URL, {
+      await fetch(WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -434,7 +535,6 @@ async function saveAlkerStatusUpdate(ctx, { techName, techNik, alkerName, idAlke
           updatedBy: `${techName} (Telegram Bot)`
         })
       });
-      await resp.json().catch(() => {});
     }
 
     await ctx.deleteMessage(loadingMsg.message_id).catch(() => {});
@@ -453,7 +553,7 @@ async function saveAlkerStatusUpdate(ctx, { techName, techNik, alkerName, idAlke
     }
     successMsg += `🕒 <b>Waktu   :</b> ${timestamp}\n`;
     successMsg += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-    successMsg += `💡 <i>Data dashboard dan Google Sheet telah diperbarui secara otomatis.</i>`;
+    successMsg += `💡 <i>Laporan telah diteruskan ke Grup SPV & Leader untuk tindak lanjut.</i>`;
 
     const buttons = [
       [Markup.button.callback('⬅️ Cek Alker Lainnya', `alker_refresh_${encodeURIComponent(techNik || techName)}`)]

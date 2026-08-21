@@ -4,6 +4,9 @@ const { interactiveBot } = require('../config/telegram');
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ALKER_ID || '1Vk5RsTMxAJDI71SAo_75j5nopV70qxd8C6k8Wrn8HQA';
 const SHEET_NAKER = 'NAKER';
+const SHEET_ALKER = 'DataAlker';
+
+const GROUP_ID_LEADER_ALERT = '-4945019710';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -16,29 +19,21 @@ const escapeHtml = (str) => {
 };
 
 /**
- * Eksekusi broadcast reminder ke seluruh teknisi yang memiliki ID Telegram
+ * Broadcast reminder mingguan ke seluruh teknisi
  */
 async function runWeeklyAlkerReminder(botInstance = interactiveBot) {
   console.log('⏰ [Scheduler] Memulai Weekly Alker Reminder ke seluruh teknisi...');
-  if (!botInstance) {
-    console.warn('[Scheduler] Interactive Bot instance tidak tersedia untuk broadcast.');
-    return { success: false, total: 0, sent: 0, failed: 0 };
-  }
+  if (!botInstance) return { success: false, total: 0, sent: 0, failed: 0 };
 
   try {
     const rows = await getSheetRows(SPREADSHEET_ID, SHEET_NAKER, true);
-    if (!rows || rows.length === 0) {
-      console.warn('[Scheduler] Data NAKER kosong.');
-      return { success: false, total: 0, sent: 0, failed: 0 };
-    }
+    if (!rows || rows.length === 0) return { success: false, total: 0, sent: 0, failed: 0 };
 
     const validTechs = rows.filter(r => {
       const tgId = String(r['ID TELEGRAM'] || r['id telegram'] || '').trim();
       const nama = String(r['NAMA'] || r['Nama'] || '').trim();
       return tgId && !nama.toLowerCase().includes('dummy') && /^\d+$/.test(tgId);
     });
-
-    console.log(`[Scheduler] Ditemukan ${validTechs.length} teknisi dengan Telegram ID aktif.`);
 
     let sent = 0;
     let failed = 0;
@@ -55,12 +50,13 @@ async function runWeeklyAlkerReminder(botInstance = interactiveBot) {
         `Halo rekan <b>${escapeHtml(nama)}</b> (NIK: <code>${escapeHtml(nik)}</code>)\n` +
         `Sektor: <b>${escapeHtml(sektor)}</b>\n\n` +
         `Mohon luangkan waktu sejenak untuk mengecek & memperbarui status <b>18 Alat Kerja (Alker)</b> Anda minggu ini.\n\n` +
-        `👉 <i>Ketik /alker atau gunakan tombol di bawah untuk membuka daftar alker Anda:</i>\n\n` +
+        `👉 <i>Jika semua alat aman, cukup klik tombol konfirmasi di bawah:</i>\n\n` +
         `Terima kasih atas kerja samanya! 🙏`
       );
 
       const buttons = [
-        [Markup.button.callback('🛠️ Cek & Update Alker Saya', `alker_refresh_${encodeURIComponent(nik)}`)]
+        [Markup.button.callback('✅ Semua Alat Aman (Konfirmasi)', 'alker_mass_confirm')],
+        [Markup.button.callback('🛠️ Cek & Update Per Alat', `alker_refresh_${encodeURIComponent(nik)}`)]
       ];
 
       try {
@@ -74,11 +70,10 @@ async function runWeeklyAlkerReminder(botInstance = interactiveBot) {
         console.warn(`[Scheduler] Gagal kirim reminder ke ${nama} (${tgId}):`, err.message);
       }
 
-      // Delay 60ms agar aman dari Telegram API rate limit
       await sleep(60);
     }
 
-    console.log(`✅ [Scheduler] Weekly Alker Reminder selesai. Berhasil: ${sent}, Gagal/Blokir: ${failed}`);
+    console.log(`✅ [Scheduler] Weekly Alker Reminder selesai. Berhasil: ${sent}, Gagal: ${failed}`);
     return { success: true, total: validTechs.length, sent, failed };
 
   } catch (err) {
@@ -88,7 +83,100 @@ async function runWeeklyAlkerReminder(botInstance = interactiveBot) {
 }
 
 /**
- * Command trigger manual untuk SPV / Admin: /broadcastalker atau /remindalker
+ * Cek teknisi yang belum update alker > 14 hari dan kirim laporan ke Grup Leader
+ */
+async function reportOverdueComplianceToLeaders(botInstance = interactiveBot) {
+  console.log('🔍 [Scheduler] Memeriksa kepatuhan update alker (> 14 hari)...');
+  if (!botInstance) return;
+
+  try {
+    const [alkerRows, nakerRows] = await Promise.all([
+      getSheetRows(SPREADSHEET_ID, SHEET_ALKER, true),
+      getSheetRows(SPREADSHEET_ID, SHEET_NAKER, true)
+    ]);
+
+    const now = Date.now();
+    const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
+
+    // Peta last update per teknisi
+    const lastUpdateMap = {};
+    alkerRows.forEach(r => {
+      const tech = String(r['Teknisi'] || r['TEKNISI'] || '').trim().toUpperCase();
+      const rawDate = String(r['Last Update'] || '').trim();
+      if (!tech) return;
+
+      let timeVal = 0;
+      if (rawDate) {
+        const parsed = Date.parse(rawDate);
+        if (!isNaN(parsed)) timeVal = parsed;
+      }
+
+      if (!lastUpdateMap[tech] || timeVal > lastUpdateMap[tech]) {
+        lastUpdateMap[tech] = timeVal;
+      }
+    });
+
+    const overdueList = [];
+    nakerRows.forEach(n => {
+      const nama = String(n['NAMA'] || n['Nama'] || '').trim();
+      const nik = String(n['NIK'] || '-').trim();
+      const sektor = String(n['PSA'] || 'BATULICIN').trim();
+      const leader = String(n['PIC LEADER'] || '-').trim();
+
+      if (!nama || nama.toLowerCase().includes('dummy')) return;
+
+      const lastTime = lastUpdateMap[nama.toUpperCase()] || 0;
+      const isOverdue = (now - lastTime) > FOURTEEN_DAYS_MS;
+
+      if (isOverdue) {
+        const daysAgo = lastTime > 0 ? Math.floor((now - lastTime) / (24 * 60 * 60 * 1000)) : '> 30';
+        overdueList.push({
+          nama,
+          nik,
+          sektor,
+          leader,
+          daysAgo
+        });
+      }
+    });
+
+    if (overdueList.length === 0) {
+      console.log('✅ [Compliance] Seluruh teknisi sudah update dalam 14 hari terakhir.');
+      return;
+    }
+
+    // Kelompokkan per sektor
+    const bySector = {};
+    overdueList.forEach(o => {
+      if (!bySector[o.sektor]) bySector[o.sektor] = [];
+      bySector[o.sektor].push(o);
+    });
+
+    let reportMsg = `⚠️ <b>LAPORAN KEPATUHAN ALKER (> 14 HARI BELUM UPDATE)</b>\n`;
+    reportMsg += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    reportMsg += `Ditemukan <b>${overdueList.length} teknisi</b> yang belum memperbarui kondisi alat kerja selama lebih dari 2 minggu:\n\n`;
+
+    for (const [sek, list] of Object.entries(bySector)) {
+      reportMsg += `🏢 <b>SEKTOR ${escapeHtml(sek)} (${list.length} Orang):</b>\n`;
+      list.forEach(t => {
+        reportMsg += `• ${escapeHtml(t.nama)} (<code>${t.nik}</code>) - <i>${t.daysAgo} hari lalu</i>\n`;
+      });
+      reportMsg += `\n`;
+    }
+
+    reportMsg += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    reportMsg += `💡 <i>Mohon PIC Leader mengingatkan rekan teknisi untuk ketik /alker di bot.</i>`;
+
+    await botInstance.telegram.sendMessage(GROUP_ID_LEADER_ALERT, reportMsg, { parse_mode: 'HTML' });
+    console.log(`📢 [Compliance] Laporan ${overdueList.length} teknisi overdue berhasil dikirim ke Grup Leader.`);
+
+  } catch (err) {
+    console.error('❌ [Compliance Error]:', err.message);
+  }
+}
+
+/**
+ * Command trigger manual untuk SPV / Admin: /broadcastalker
  */
 async function handleBroadcastAlkerCommand(ctx) {
   const loading = await ctx.reply('📢 <i>Sedang mengirim reminder alker ke seluruh ID Telegram teknisi...</i>', { parse_mode: 'HTML' });
@@ -114,5 +202,6 @@ async function handleBroadcastAlkerCommand(ctx) {
 
 module.exports = {
   runWeeklyAlkerReminder,
+  reportOverdueComplianceToLeaders,
   handleBroadcastAlkerCommand
 };

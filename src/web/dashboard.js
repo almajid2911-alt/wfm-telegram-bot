@@ -16,10 +16,12 @@ async function getDashboardData() {
   const techMap = {};
   nakerRows.forEach(n => {
     const name = String(n['NAMA'] || n['Nama'] || '').trim().toUpperCase();
+    const nik = String(n['NIK'] || '').trim();
     const psa = String(n['PSA'] || n['Sektor'] || n['SEKTOR'] || '').trim().toUpperCase();
     const leader = String(n['PIC LEADER'] || n['Leader'] || '').trim();
     if (name) {
       techMap[name] = {
+        nik,
         sektor: psa || 'BATULICIN',
         leader: leader || '-'
       };
@@ -34,6 +36,11 @@ async function getDashboardData() {
   const alkerTypeCounts = {};
   const items = [];
   const uniqueTechs = new Set();
+  const techLastUpdateMap = {};
+
+  const nowMs = Date.now();
+  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+  const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
 
   alkerRows.forEach((row, idx) => {
     const sn = String(row['SN / ID Alker'] || row['ID Alker'] || row['ID'] || '').trim();
@@ -49,8 +56,18 @@ async function getDashboardData() {
     totalItems++;
     uniqueTechs.add(teknisi.toUpperCase());
 
-    const techInfo = techMap[teknisi.toUpperCase()] || { sektor: 'BATULICIN', leader: '-' };
+    const techInfo = techMap[teknisi.toUpperCase()] || { nik: '-', sektor: 'BATULICIN', leader: '-' };
     const sektor = String(row['Sektor'] || techInfo.sektor || 'BATULICIN').trim().toUpperCase();
+
+    // Track Last Update per Teknisi
+    let updateMs = 0;
+    if (lastUpdate) {
+      const p = Date.parse(lastUpdate);
+      if (!isNaN(p)) updateMs = p;
+    }
+    if (!techLastUpdateMap[teknisi.toUpperCase()] || updateMs > techLastUpdateMap[teknisi.toUpperCase()]) {
+      techLastUpdateMap[teknisi.toUpperCase()] = updateMs;
+    }
 
     if (!sectorCounts[sektor]) {
       sectorCounts[sektor] = { normal: 0, rusak: 0, missing: 0, total: 0 };
@@ -87,6 +104,7 @@ async function getDashboardData() {
       sn: sn || '-',
       namaAlker,
       teknisi,
+      nik: techInfo.nik,
       sektor,
       leader: techInfo.leader,
       status: status || 'Normal',
@@ -97,6 +115,19 @@ async function getDashboardData() {
     });
   });
 
+  // Hitung Compliance Teknisi
+  let complyCount = 0;
+  let overdueCount = 0;
+  for (const tName of uniqueTechs) {
+    const tMs = techLastUpdateMap[tName] || 0;
+    const diff = nowMs - tMs;
+    if (diff <= SEVEN_DAYS_MS) {
+      complyCount++;
+    } else if (diff > FOURTEEN_DAYS_MS) {
+      overdueCount++;
+    }
+  }
+
   const normalPercent = totalItems > 0 ? ((normalCount / totalItems) * 100).toFixed(1) : '0';
 
   return {
@@ -106,7 +137,9 @@ async function getDashboardData() {
       rusakCount,
       missingCount,
       normalPercent,
-      totalTeknisi: uniqueTechs.size
+      totalTeknisi: uniqueTechs.size,
+      complyCount,
+      overdueCount
     },
     sectorCounts,
     alkerTypeCounts,
@@ -115,7 +148,7 @@ async function getDashboardData() {
 }
 
 /**
- * Template HTML Modern Dashboard SPV (Ultra Lightweight ~15 KB)
+ * Template HTML Modern Dashboard SPV dengan Ekspor CSV & Print
  */
 function renderDashboardHtml() {
   return `<!DOCTYPE html>
@@ -150,6 +183,12 @@ function renderDashboardHtml() {
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #0f172a; }
     ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    @media print {
+      header, .no-print { display: none !important; }
+      body { background: #fff !important; color: #000 !important; }
+      table { border-collapse: collapse; width: 100%; font-size: 10px; }
+      th, td { border: 1px solid #ddd !important; color: #000 !important; }
+    }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen">
@@ -166,15 +205,19 @@ function renderDashboardHtml() {
           <p class="text-xs text-slate-400">Supervisor & Management Executive View</p>
         </div>
       </div>
-      <div class="flex items-center space-x-3">
-        <button onclick="loadData()" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 transition flex items-center space-x-2 border border-slate-700">
-          <i class="fa-solid fa-rotate text-blue-400" id="reloadIcon"></i>
-          <span>Refresh Data</span>
+      <div class="flex items-center space-x-2.5">
+        <button onclick="exportToCsv()" class="px-3 py-1.5 rounded-lg bg-emerald-950 hover:bg-emerald-900 text-xs font-semibold text-emerald-300 transition flex items-center space-x-1.5 border border-emerald-800">
+          <i class="fa-solid fa-file-excel text-emerald-400"></i>
+          <span class="hidden sm:inline">Export Excel/CSV</span>
         </button>
-        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-950 text-emerald-400 border border-emerald-800">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span>
-          Live Railway
-        </span>
+        <button onclick="window.print()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 transition flex items-center space-x-1.5 border border-slate-700">
+          <i class="fa-solid fa-print text-slate-400"></i>
+          <span class="hidden sm:inline">Cetak Rekap</span>
+        </button>
+        <button onclick="loadData()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 transition flex items-center space-x-1.5 border border-slate-700">
+          <i class="fa-solid fa-rotate text-blue-400" id="reloadIcon"></i>
+          <span>Refresh</span>
+        </button>
       </div>
     </div>
   </header>
@@ -182,67 +225,76 @@ function renderDashboardHtml() {
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
     <!-- KPI CARDS -->
-    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+    <div class="grid grid-cols-2 lg:grid-cols-6 gap-3.5">
       <!-- Total Alker -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm">
         <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
-          <span>Total Alat Kerja</span>
+          <span>Total Alker</span>
           <i class="fa-solid fa-boxes-stacked text-blue-400"></i>
         </div>
         <div class="mt-2 flex items-baseline justify-between">
           <div class="text-2xl font-bold text-white" id="statTotalItems">-</div>
-          <span class="text-xs text-slate-500" id="statTotalTechs">- Teknisi</span>
+          <span class="text-[11px] text-slate-500" id="statTotalTechs">- Naker</span>
         </div>
       </div>
 
       <!-- Normal % -->
       <div class="bg-slate-900 border border-emerald-950/80 rounded-2xl p-4 shadow-sm relative overflow-hidden">
-        <div class="absolute -right-4 -bottom-4 w-16 h-16 bg-emerald-500/10 rounded-full blur-xl"></div>
         <div class="flex items-center justify-between text-emerald-400 text-xs font-medium">
-          <span>Kondisi Normal</span>
+          <span>Kondisi Baik</span>
           <i class="fa-solid fa-circle-check"></i>
         </div>
         <div class="mt-2 flex items-baseline justify-between">
           <div class="text-2xl font-bold text-emerald-400" id="statNormalPercent">-</div>
-          <span class="text-xs font-semibold text-emerald-500" id="statNormalCount">- item</span>
+          <span class="text-[11px] font-semibold text-emerald-500" id="statNormalCount">- item</span>
         </div>
       </div>
 
       <!-- Rusak -->
       <div class="bg-slate-900 border border-rose-950/80 rounded-2xl p-4 shadow-sm relative overflow-hidden">
-        <div class="absolute -right-4 -bottom-4 w-16 h-16 bg-rose-500/10 rounded-full blur-xl"></div>
         <div class="flex items-center justify-between text-rose-400 text-xs font-medium">
           <span>Kondisi Rusak</span>
           <i class="fa-solid fa-triangle-exclamation"></i>
         </div>
         <div class="mt-2 flex items-baseline justify-between">
           <div class="text-2xl font-bold text-rose-400" id="statRusakCount">-</div>
-          <span class="text-xs px-2 py-0.5 rounded bg-rose-950 text-rose-300 font-medium">Urgent</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-rose-950 text-rose-300 font-medium">Urgent</span>
         </div>
       </div>
 
       <!-- Hilang / Tidak Ada -->
       <div class="bg-slate-900 border border-amber-950/80 rounded-2xl p-4 shadow-sm relative overflow-hidden">
-        <div class="absolute -right-4 -bottom-4 w-16 h-16 bg-amber-500/10 rounded-full blur-xl"></div>
         <div class="flex items-center justify-between text-amber-400 text-xs font-medium">
-          <span>Hilang / Tidak Ada</span>
+          <span>Hilang/Tidak Ada</span>
           <i class="fa-solid fa-circle-xmark"></i>
         </div>
         <div class="mt-2 flex items-baseline justify-between">
           <div class="text-2xl font-bold text-amber-400" id="statMissingCount">-</div>
-          <span class="text-xs text-amber-500">Perlu Pengadaan</span>
+          <span class="text-[10px] text-amber-500">Pengadaan</span>
         </div>
       </div>
 
-      <!-- SPV Action Needed -->
-      <div class="bg-gradient-to-br from-indigo-900/40 to-slate-900 border border-indigo-800/50 rounded-2xl p-4 shadow-sm col-span-2 lg:col-span-1">
-        <div class="flex items-center justify-between text-indigo-300 text-xs font-medium">
-          <span>Total Bermasalah</span>
-          <i class="fa-solid fa-list-check"></i>
+      <!-- Kepatuhan Mingguan -->
+      <div class="bg-slate-900 border border-indigo-950/80 rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center justify-between text-indigo-400 text-xs font-medium">
+          <span>Update Minggu Ini</span>
+          <i class="fa-solid fa-user-check"></i>
         </div>
         <div class="mt-2 flex items-baseline justify-between">
-          <div class="text-2xl font-bold text-indigo-200" id="statIssuesCount">-</div>
-          <button onclick="filterIssuesOnly()" class="text-xs text-indigo-400 hover:underline">Lihat List &rarr;</button>
+          <div class="text-2xl font-bold text-indigo-300" id="statComplyCount">-</div>
+          <span class="text-[11px] text-indigo-400">Teknisi</span>
+        </div>
+      </div>
+
+      <!-- Overdue > 14 Hari -->
+      <div class="bg-gradient-to-br from-rose-950/40 to-slate-900 border border-rose-900/40 rounded-2xl p-4 shadow-sm col-span-2 lg:col-span-1">
+        <div class="flex items-center justify-between text-rose-300 text-xs font-medium">
+          <span>Overdue > 14 Hari</span>
+          <i class="fa-solid fa-user-clock"></i>
+        </div>
+        <div class="mt-2 flex items-baseline justify-between">
+          <div class="text-2xl font-bold text-rose-300" id="statOverdueCount">-</div>
+          <button onclick="filterIssuesOnly()" class="text-[11px] text-rose-400 hover:underline font-medium">Cek Masalah &rarr;</button>
         </div>
       </div>
     </div>
@@ -273,12 +325,12 @@ function renderDashboardHtml() {
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h3 class="text-base font-semibold text-white">Daftar Inventaris Alker Seluruh Teknisi</h3>
-          <p class="text-xs text-slate-400">Filter data berdasarkan sektor, status, atau cari nama teknisi</p>
+          <p class="text-xs text-slate-400">Pencarian berdasarkan NIK, Nama Teknisi, Sektor, atau SN</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <div class="relative">
             <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-500 text-xs"></i>
-            <input type="text" id="searchInput" oninput="applyFilters()" placeholder="Cari teknisi / alat..." class="bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500 w-44 sm:w-56">
+            <input type="text" id="searchInput" oninput="applyFilters()" placeholder="Cari NIK / Nama / Alat..." class="bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500 w-44 sm:w-60">
           </div>
           <select id="sektorFilter" onchange="applyFilters()" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500">
             <option value="ALL">Semua Sektor</option>
@@ -306,6 +358,7 @@ function renderDashboardHtml() {
               <th class="py-3 px-3">SN / ID</th>
               <th class="py-3 px-4">Nama Alker</th>
               <th class="py-3 px-4">Nama Teknisi</th>
+              <th class="py-3 px-3">NIK</th>
               <th class="py-3 px-3">Sektor</th>
               <th class="py-3 px-3">Status</th>
               <th class="py-3 px-4">Keterangan Kerusakan</th>
@@ -314,7 +367,7 @@ function renderDashboardHtml() {
           </thead>
           <tbody class="divide-y divide-slate-800/60 font-normal" id="tableBody">
             <tr>
-              <td colspan="8" class="text-center py-8 text-slate-500">
+              <td colspan="9" class="text-center py-8 text-slate-500">
                 <i class="fa-solid fa-spinner fa-spin mr-2"></i> Memuat data inventaris...
               </td>
             </tr>
@@ -348,12 +401,13 @@ function renderDashboardHtml() {
         globalItems = d.items;
 
         document.getElementById('statTotalItems').innerText = d.summary.totalItems;
-        document.getElementById('statTotalTechs').innerText = d.summary.totalTeknisi + ' Teknisi';
+        document.getElementById('statTotalTechs').innerText = d.summary.totalTeknisi + ' Naker';
         document.getElementById('statNormalPercent').innerText = d.summary.normalPercent + '%';
         document.getElementById('statNormalCount').innerText = d.summary.normalCount + ' item';
         document.getElementById('statRusakCount').innerText = d.summary.rusakCount;
         document.getElementById('statMissingCount').innerText = d.summary.missingCount;
-        document.getElementById('statIssuesCount').innerText = d.summary.rusakCount + d.summary.missingCount;
+        document.getElementById('statComplyCount').innerText = d.summary.complyCount;
+        document.getElementById('statOverdueCount').innerText = d.summary.overdueCount;
 
         renderCharts(d);
         applyFilters();
@@ -422,7 +476,7 @@ function renderDashboardHtml() {
       const tbody = document.getElementById('tableBody');
 
       let filtered = globalItems.filter(item => {
-        const textToSearch = (item.teknisi + ' ' + item.namaAlker + ' ' + item.sn + ' ' + item.keterangan).toLowerCase();
+        const textToSearch = (item.teknisi + ' ' + item.nik + ' ' + item.namaAlker + ' ' + item.sn + ' ' + item.keterangan).toLowerCase();
         let matchSearch = !search || textToSearch.includes(search);
         let matchSektor = (sektor === 'ALL') || (item.sektor === sektor);
         let matchStatus = true;
@@ -436,7 +490,7 @@ function renderDashboardHtml() {
       });
 
       if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-slate-500">Tidak ada data yang cocok dengan filter.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-slate-500">Tidak ada data yang cocok dengan filter.</td></tr>';
       } else {
         tbody.innerHTML = filtered.map((item, index) => \`
           <tr class="hover:bg-slate-800/40 transition">
@@ -444,6 +498,7 @@ function renderDashboardHtml() {
             <td class="py-2.5 px-3 font-mono text-slate-400 text-[11px]">\${item.sn}</td>
             <td class="py-2.5 px-4 font-medium text-white">\${item.namaAlker}</td>
             <td class="py-2.5 px-4 font-semibold text-slate-200">\${item.teknisi}</td>
+            <td class="py-2.5 px-3 font-mono text-slate-400 text-[11px]">\${item.nik || '-'}</td>
             <td class="py-2.5 px-3">
               <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] font-medium border border-slate-700">\${item.sektor}</span>
             </td>
@@ -472,7 +527,40 @@ function renderDashboardHtml() {
       window.scrollTo({ top: document.getElementById('alkerTable').offsetTop - 100, behavior: 'smooth' });
     }
 
-    // Load data on start
+    function exportToCsv() {
+      if (!globalItems || globalItems.length === 0) {
+        alert('Tidak ada data untuk diekspor.');
+        return;
+      }
+
+      const headers = ['No', 'SN / ID Alker', 'Nama Alker', 'Nama Teknisi', 'NIK', 'Sektor', 'Leader', 'Status', 'Keterangan Kerusakan', 'Last Update'];
+      const csvRows = [headers.join(',')];
+
+      globalItems.forEach((it, idx) => {
+        const row = [
+          idx + 1,
+          \`"\${it.sn.replace(/"/g, '""')}"\`,
+          \`"\${it.namaAlker.replace(/"/g, '""')}"\`,
+          \`"\${it.teknisi.replace(/"/g, '""')}"\`,
+          \`"\${(it.nik || '').replace(/"/g, '""')}"\`,
+          \`"\${it.sektor.replace(/"/g, '""')}"\`,
+          \`"\${(it.leader || '').replace(/"/g, '""')}"\`,
+          \`"\${it.status.replace(/"/g, '""')}"\`,
+          \`"\${it.keterangan.replace(/"/g, '""')}"\`,
+          \`"\${it.lastUpdate.replace(/"/g, '""')}"\`
+        ];
+        csvRows.push(row.join(','));
+      });
+
+      const blob = new Blob([csvRows.join('\\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = \`Rekap_Alker_WFM_\${new Date().toISOString().slice(0, 10)}.csv\`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
     loadData();
   </script>
 </body>
