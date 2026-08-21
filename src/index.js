@@ -232,13 +232,24 @@ if (interactiveBot) {
 }
 
 // -------------------------------------------------------------
-// 3. HTTP SERVER — Web Dashboard + Webhook Endpoint
+// 3. HTTP SERVER — Web Dashboard + Mobile Web Form + Webhook
 // -------------------------------------------------------------
 const { getDashboardData, renderDashboardHtml } = require('./web/dashboard');
+const { renderAlkerFormHtml } = require('./web/alkerForm');
+const { getSheetRows } = require('./config/google');
+
+const SPREADSHEET_ID = process.env.SPREADSHEET_ALKER_ID || '1Vk5RsTMxAJDI71SAo_75j5nopV70qxd8C6k8Wrn8HQA';
+const SHEET_ALKER = 'DataAlker';
+const SHEET_NAKER = 'NAKER';
+const WEBHOOK_SCRIPT_URL = process.env.ALKER_WEBHOOK_URL || process.env.GOOGLE_SCRIPT_ALKER_URL || 'https://script.google.com/macros/s/AKfycbyTvKaqyjYSLXQgpYvNqA1X9oBVQzGbmfNb-ZcDiQy5_mhca6KEuYdqyvO4j3aRAW6y/exec';
+const GROUP_ID_LEADER_ALERT = '-4945019710';
 
 const server = http.createServer(async (req, res) => {
+  const reqUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  const pathname = reqUrl.pathname;
+
   // ✅ 1. Webhook endpoint — menerima update dari Telegram
-  if (req.method === 'POST' && req.url === WEBHOOK_PATH) {
+  if (req.method === 'POST' && pathname === WEBHOOK_PATH) {
     let body = '';
     req.on('data', (chunk) => { body += chunk.toString(); });
     req.on('end', async () => {
@@ -256,10 +267,18 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // ✅ 2. API Endpoint Data Alker JSON
-  if (req.method === 'GET' && req.url.startsWith('/api/alker')) {
+  // ✅ 2. API: Daftar Seluruh Teknisi per Sektor (untuk Form Mobile)
+  if (req.method === 'GET' && pathname === '/api/alker/techs') {
     try {
-      const data = await getDashboardData();
+      const nakerRows = await getSheetRows(SPREADSHEET_ID, SHEET_NAKER, true);
+      const data = nakerRows.map(n => ({
+        name: String(n['NAMA'] || n['Nama'] || '').trim().toUpperCase(),
+        nik: String(n['NIK'] || '').trim(),
+        sektor: String(n['PSA'] || n['Sektor'] || n['SEKTOR'] || 'BATULICIN').trim().toUpperCase(),
+        leader: String(n['PIC LEADER'] || n['Leader'] || '-').trim(),
+        telegramId: String(n['ID TELEGRAM'] || '').trim()
+      })).filter(t => t.name);
+
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true, data }));
     } catch (err) {
@@ -269,8 +288,153 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // ✅ 3. Tampilan Web Dashboard SPV Monitoring Alker
-  if (req.method === 'GET' && (req.url === '/' || req.url === '/alker' || req.url === '/dashboard')) {
+  // ✅ 3. API: Daftar 18 Alker Milik Teknisi Tertentu
+  if (req.method === 'GET' && pathname === '/api/alker/tech-items') {
+    try {
+      const targetName = (reqUrl.searchParams.get('name') || '').trim().toLowerCase();
+      if (!targetName) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ success: false, error: 'Parameter name wajib diisi.' }));
+      }
+
+      const alkerRows = await getSheetRows(SPREADSHEET_ID, SHEET_ALKER, true);
+      const filtered = alkerRows.filter(r => {
+        const t = String(r['Teknisi'] || r['TEKNISI'] || '').trim().toLowerCase();
+        const namaAlker = String(r['Nama Alker'] || r['NAMA ALKER'] || '').trim().toUpperCase();
+        return (t === targetName || t.includes(targetName)) && namaAlker !== 'BAJU';
+      });
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, data: filtered }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: err.message }));
+    }
+    return;
+  }
+
+  // ✅ 4. API: Submit Form Checklist Alker dari Mobile Web
+  if (req.method === 'POST' && pathname === '/api/alker/submit-form') {
+    let body = '';
+    req.on('data', (chunk) => { body += chunk.toString(); });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body);
+        const { technicianName, technicianNik, sektor, leader, items } = payload;
+
+        if (!technicianName || !items || !Array.isArray(items)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ success: false, message: 'Data tidak lengkap.' }));
+        }
+
+        let normalCount = 0;
+        let rusakCount = 0;
+        let missingCount = 0;
+        const troubleItems = [];
+
+        items.forEach(it => {
+          const st = (it.status || 'Normal').trim();
+          if (st === 'Rusak') {
+            rusakCount++;
+            troubleItems.push({ ...it, statusText: '🔴 Rusak' });
+          } else if (st.includes('Tidak') || st === 'Hilang') {
+            missingCount++;
+            troubleItems.push({ ...it, statusText: '❌ Hilang' });
+          } else {
+            normalCount++;
+          }
+        });
+
+        // 1. Simpan ke Google Sheets via Apps Script Webhook
+        if (WEBHOOK_SCRIPT_URL) {
+          if (rusakCount === 0 && missingCount === 0) {
+            // Semua Aman -> Mass Confirm
+            await fetch(WEBHOOK_SCRIPT_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'mass_confirm_alker',
+                technicianName: technicianName
+              })
+            }).catch(e => console.warn('[Alker Webhook Error]', e.message));
+          } else {
+            // Ada alat rusak/hilang -> Update per alat
+            for (const item of items) {
+              await fetch(WEBHOOK_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'update_alker_status',
+                  technicianName: technicianName,
+                  alkerName: item.name,
+                  idAlker: item.idAlker || '',
+                  status: item.status,
+                  keterangan: item.keterangan || '',
+                  sektor: sektor || 'BATULICIN'
+                })
+              }).catch(e => console.warn('[Alker Webhook Item Error]', e.message));
+            }
+          }
+        }
+
+        // 2. Kirim Notifikasi Rekap ke Grup Telegram Leader & SPV
+        const tg = interactiveBot ? interactiveBot.telegram : null;
+        if (tg) {
+          const timeStr = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Makassar' }) + ' WITA';
+          let alertCard = `📋 <b>LAPORAN CHECKLIST ALKER (WEB FORM)</b>\n`;
+          alertCard += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+          alertCard += `👤 <b>Teknisi :</b> ${technicianName} (${technicianNik || '-'})\n`;
+          alertCard += `🏢 <b>Sektor  :</b> ${sektor || 'BATULICIN'}\n`;
+          alertCard += `🕒 <b>Waktu   :</b> ${timeStr}\n\n`;
+          alertCard += `📊 <b>Hasil Pemeriksaan:</b>\n`;
+          alertCard += `  🟢 Normal   : <b>${normalCount}</b> item\n`;
+          alertCard += `  🔴 Rusak    : <b>${rusakCount}</b> item\n`;
+          alertCard += `  ❌ Tidak Ada: <b>${missingCount}</b> item\n`;
+
+          if (troubleItems.length > 0) {
+            alertCard += `\n⚠️ <b>Rincian Alat Bermasalah:</b>\n`;
+            troubleItems.forEach((t, i) => {
+              alertCard += `${i + 1}. ${t.statusText} <b>${t.name}</b>\n   <i>Ket: ${t.keterangan || 'Tidak ada catatan'}</i>\n`;
+            });
+          } else {
+            alertCard += `\n✨ <i>Semua 18 item alker dalam kondisi aman & berfungsi baik.</i>\n`;
+          }
+
+          tg.sendMessage(GROUP_ID_LEADER_ALERT, alertCard, { parse_mode: 'HTML' }).catch(() => {});
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          message: 'Laporan alker berhasil disimpan!',
+          normalCount,
+          rusakCount,
+          missingCount
+        }));
+      } catch (err) {
+        console.error('Error submitting alker form:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: err.message }));
+      }
+    });
+    return;
+  }
+
+  // ✅ 5. Halaman Mobile Web Form untuk Checklist Alker
+  if (req.method === 'GET' && (pathname === '/form' || pathname === '/mobile' || pathname === '/checklist' || pathname === '/alker/form')) {
+    try {
+      const html = renderAlkerFormHtml();
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(html);
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(`<h3>Gagal memuat Form: ${err.message}</h3>`);
+    }
+    return;
+  }
+
+  // ✅ 6. Dashboard SPV Monitoring Alker
+  if (req.method === 'GET' && (pathname === '/' || pathname === '/alker' || pathname === '/dashboard')) {
     try {
       const data = await getDashboardData();
       const html = renderDashboardHtml(data);
@@ -283,13 +447,13 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // ✅ 4. Health check
+  // ✅ 7. Health check
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({
     status: 'ONLINE',
-    mode: 'WEBHOOK',
-    dashboard: `https://${WEBHOOK_DOMAIN}/alker`,
-    service: 'WFM Telegram Bot & Alker Dashboard',
+    service: 'WFM Telegram Bot & Alker Mobile Ecosystem',
+    webForm: `https://${WEBHOOK_DOMAIN}/form`,
+    dashboard: `https://${WEBHOOK_DOMAIN}/dashboard`,
     time: new Date().toISOString(),
     timezone: TIMEZONE
   }));

@@ -146,6 +146,9 @@ async function handleAlkerCommand(ctx, rawArgs = '') {
 
       const sectorKeyboard = Markup.inlineKeyboard([
         [
+          Markup.button.url('📱 Buka Form Checklist di HP (Web)', 'https://alker.103.93.129.213.sslip.io/form')
+        ],
+        [
           Markup.button.callback('🏢 Sektor Batulicin', 'alker_sektor_batulicin'),
           Markup.button.callback('🏢 Sektor Satui', 'alker_sektor_satui')
         ],
@@ -158,7 +161,7 @@ async function handleAlkerCommand(ctx, rawArgs = '') {
       return ctx.reply(
         `🛠️ <b>PILIH WILAYAH / NAMA TEKNISI ALKER</b>\n` +
         `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `Silakan pilih <b>Sektor Wilayah</b> Anda di bawah untuk memilih nama teknisi:\n\n` +
+        `📱 <i>Gunakan Web Form HP untuk checklist 18 alat sekaligus dengan cepat, atau pilih Sektor Wilayah Anda di bawah:</i>\n\n` +
         `💡 <i>Atau langsung ketik NIK / Nama Anda:\n👉 Contoh: <code>/alker 25830030</code> atau <code>/alker ARIF</code></i>`,
         { parse_mode: 'HTML', ...sectorKeyboard }
       );
@@ -217,17 +220,21 @@ async function handleAlkerCommand(ctx, rawArgs = '') {
     card += `  ❌ Tidak Ada: <b>${countMissing}</b> item\n`;
     card += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
 
+    const formUrl = `https://alker.103.93.129.213.sslip.io/form?nik=${encodeURIComponent(techNik)}&tech=${encodeURIComponent(techName)}&sektor=${encodeURIComponent(tech.sektor)}`;
+
     let buttons = [];
     if (isOwner) {
-      card += `👇 <i>Pilih tombol cepat jika semua alat aman, atau klik rincian untuk update alat tertentu:</i>`;
+      card += `👇 <i>Pilih tombol Form HP untuk checklist 18 alat sekaligus, atau pilih aksi di bawah:</i>`;
       buttons = [
-        [Markup.button.callback('✅ Tidak Ada Perubahan (Semua Aman)', 'alker_mass_confirm')],
-        [Markup.button.callback('📝 Rincian & Update Per Alat', 'alker_list_items')],
+        [Markup.button.url('📱 Buka Checklist Alker (Web HP)', formUrl)],
+        [Markup.button.callback('✅ Semua Aman (1-Klik Telegram)', 'alker_mass_confirm')],
+        [Markup.button.callback('📝 Rincian & Update Manual', 'alker_list_items')],
         [Markup.button.callback('🔄 Refresh Data', `alker_refresh_${encodeURIComponent(techNik || techName)}`)]
       ];
     } else {
       card += `🔒 <b>Mode Lihat (Read-Only)</b>\n<i>Anda sedang melihat data milik ${escapeHtml(techName)}. Anda tidak dapat mengubah data ini karena bukan pemilik akun.</i>`;
       buttons = [
+        [Markup.button.url('📱 Buka Form Checklist (Web HP)', formUrl)],
         [Markup.button.callback('📋 Rincian Alat (Mode Lihat)', 'alker_list_items_readonly')],
         [Markup.button.callback('🔄 Refresh Data', `alker_refresh_${encodeURIComponent(techNik || techName)}`)]
       ];
@@ -315,6 +322,9 @@ async function handleAlkerCallback(ctx) {
     await ctx.answerCbQuery().catch(() => {});
     const sectorKeyboard = Markup.inlineKeyboard([
       [
+        Markup.button.url('📱 Buka Form Checklist di HP (Web)', 'https://alker.103.93.129.213.sslip.io/form')
+      ],
+      [
         Markup.button.callback('🏢 Sektor Batulicin', 'alker_sektor_batulicin'),
         Markup.button.callback('🏢 Sektor Satui', 'alker_sektor_satui')
       ],
@@ -326,7 +336,7 @@ async function handleAlkerCallback(ctx) {
     return ctx.editMessageText(
       `🛠️ <b>PILIH WILAYAH / NAMA TEKNISI ALKER</b>\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `Silakan pilih <b>Sektor Wilayah</b> Anda di bawah untuk memilih nama teknisi:`,
+      `📱 <i>Gunakan Web Form HP untuk checklist cepat, atau pilih Sektor Wilayah Anda di bawah:</i>`,
       { parse_mode: 'HTML', ...sectorKeyboard }
     );
   }
