@@ -24,6 +24,7 @@ const handleMappingCommand = require('./commands/mapping');
 const handleTiketCommand = require('./commands/tiket');
 const handleQcCommand = require('./commands/qc');
 const { handleUnspecCommand, handleUnspecMessage, handleUnspecCallback } = require('./commands/unspec');
+const { handleAlkerCommand, handleAlkerCallback, handleAlkerMessage } = require('./commands/alker');
 
 console.log('=============================================');
 console.log('🚀 WFM TELEGRAM BOT ENGINE STARTING...');
@@ -85,6 +86,7 @@ if (interactiveBot) {
   interactiveBot.start((ctx) => ctx.reply(
     `👋 Halo *${ctx.from.first_name || 'Rekan'}*!\n\n` +
     `Saya adalah Bot Asisten WFM. Berikut perintah:\n\n` +
+    `• \`/alker\` - 🛠️ Cek & Update Status Alat Kerja (Alker)\n` +
     `• \`/mapping <sektor>\` - Mapping WO per sektor\n` +
     `• \`/tiket <sektor>\` - Monitoring sisa tiket\n` +
     `• \`/unspec\` - 📝 Rekap data unspek kendala (Bank Data)\n` +
@@ -98,15 +100,16 @@ if (interactiveBot) {
 
   interactiveBot.help((ctx) => ctx.reply(
     `🤖 *MENU BANTUAN BOT ASISTEN WFM*\n\n` +
-    `📌 *1. REKAP UNSPEK KENDALA (BANK DATA)*\n\`/unspec\` atau \`/unspek\`\n` +
+    `📌 *1. MONITORING & UPDATE ALKER (ALAT KERJA)*\n\`/alker\` atau \`/alker <nama_teknisi>\`\n\n` +
+    `📌 *2. REKAP UNSPEK KENDALA (BANK DATA)*\n\`/unspec\` atau \`/unspek\`\n` +
     `_Format cepat: \`/unspec 172312345678 | ODP-BLC-FAB/01 | Port ODP Penuh\`_\n\n` +
-    `📌 *2. MAPPING SEKTOR*\n\`/mapping batulicin\` | \`/mapping kotabaru\` | \`/mapping satui\`\n\n` +
-    `📌 *3. TIKET SEKTOR*\n\`/tiket batulicin\` | \`/tiket kotabaru\` | \`/tiket satui\`\n\n` +
-    `📌 *4. REKAP QC REJECT*\n\`/qc\`\n\n` +
-    `📌 *5. DETAIL TIKET INSERA*\n\`/insera INC52127760\` atau langsung ketik \`INC...\`\n\n` +
-    `📌 *6. DETAIL ORDER BIMA*\n\`/bima AOi...\` atau langsung ketik \`AOi...\`\n\n` +
-    `📌 *7. REKON TIM*\n\`/rekon BLC|ARIF-006\`\n\n` +
-    `📌 *8. VALINS TIM*\n\`/valins BLC|ARIF-006\``,
+    `📌 *3. MAPPING SEKTOR*\n\`/mapping batulicin\` | \`/mapping kotabaru\` | \`/mapping satui\`\n\n` +
+    `📌 *4. TIKET SEKTOR*\n\`/tiket batulicin\` | \`/tiket kotabaru\` | \`/tiket satui\`\n\n` +
+    `📌 *5. REKAP QC REJECT*\n\`/qc\`\n\n` +
+    `📌 *6. DETAIL TIKET INSERA*\n\`/insera INC52127760\` atau langsung ketik \`INC...\`\n\n` +
+    `📌 *7. DETAIL ORDER BIMA*\n\`/bima AOi...\` atau langsung ketik \`AOi...\`\n\n` +
+    `📌 *8. REKON TIM*\n\`/rekon BLC|ARIF-006\`\n\n` +
+    `📌 *9. VALINS TIM*\n\`/valins BLC|ARIF-006\``,
     { parse_mode: 'Markdown' }
   ));
 
@@ -154,7 +157,16 @@ if (interactiveBot) {
     handleBimaCommand(ctx, kw);
   });
 
-  // Callback Query (Tombol Sektor & Unspec)
+  interactiveBot.command('alker', (ctx) => {
+    const args = ctx.message.text.trim().split(/\s+/).slice(1).join(' ').trim();
+    handleAlkerCommand(ctx, args);
+  });
+  interactiveBot.command('cekalker', (ctx) => {
+    const args = ctx.message.text.trim().split(/\s+/).slice(1).join(' ').trim();
+    handleAlkerCommand(ctx, args);
+  });
+
+  // Callback Query (Tombol Sektor, Unspec & Alker)
   interactiveBot.action('map_batulicin', (ctx) => { ctx.answerCbQuery().catch(() => {}); handleMappingCommand(ctx, 'batulicin'); });
   interactiveBot.action('map_kotabaru',  (ctx) => { ctx.answerCbQuery().catch(() => {}); handleMappingCommand(ctx, 'kotabaru'); });
   interactiveBot.action('map_satui',     (ctx) => { ctx.answerCbQuery().catch(() => {}); handleMappingCommand(ctx, 'satui'); });
@@ -163,6 +175,12 @@ if (interactiveBot) {
   interactiveBot.action('tkt_satui',     (ctx) => { ctx.answerCbQuery().catch(() => {}); handleTiketCommand(ctx, 'satui'); });
   interactiveBot.action('unspec_start_again', (ctx) => { ctx.answerCbQuery().catch(() => {}); handleUnspecCommand(ctx, ''); });
   interactiveBot.action(/^unspec_/, async (ctx) => { await handleUnspecCallback(ctx); });
+  interactiveBot.action(/^alker_refresh_/, (ctx) => {
+    const tech = decodeURIComponent(ctx.callbackQuery.data.replace('alker_refresh_', ''));
+    ctx.answerCbQuery().catch(() => {});
+    handleAlkerCommand(ctx, tech);
+  });
+  interactiveBot.action(/^alker_/, async (ctx) => { await handleAlkerCallback(ctx); });
 
   // Teks langsung (tanpa slash)
   interactiveBot.on('text', async (ctx, next) => {
@@ -172,6 +190,10 @@ if (interactiveBot) {
     // 1. Prioritaskan sesi pengisian interaktif unspec jika user sedang di dalam form
     const handledByUnspec = await handleUnspecMessage(ctx);
     if (handledByUnspec) return;
+
+    // 2. Prioritaskan sesi pengisian keterangan alker
+    const handledByAlker = await handleAlkerMessage(ctx);
+    if (handledByAlker) return;
 
     const incMatch = text.match(/^\s*(INC?\d+)\b/i);
     if (incMatch) return handleInseraCommand(ctx, incMatch[1]);
