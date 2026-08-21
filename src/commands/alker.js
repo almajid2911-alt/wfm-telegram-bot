@@ -189,9 +189,15 @@ async function handleAlkerCommand(ctx, rawArgs = '') {
       else countNormal++;
     });
 
+    const currentUserId = String(ctx.from?.id || '');
+    const isAdminOrLeader = (currentUserId === '171053504');
+    const isOwner = (tech.telegramId && tech.telegramId === currentUserId) || (!tech.telegramId && query === tech.nik) || isAdminOrLeader;
+
     sessions.set(sessionKey, {
       techName,
       techNik,
+      techTelegramId: tech.telegramId,
+      isOwner,
       sektor: tech.sektor,
       leader: tech.leader,
       alkers,
@@ -210,13 +216,22 @@ async function handleAlkerCommand(ctx, rawArgs = '') {
     card += `  🔴 Rusak    : <b>${countRusak}</b> item\n`;
     card += `  ❌ Tidak Ada: <b>${countMissing}</b> item\n`;
     card += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-    card += `👇 <i>Pilih tombol cepat jika semua alat aman, atau klik rincian untuk update alat tertentu:</i>`;
 
-    const buttons = [
-      [Markup.button.callback('✅ Tidak Ada Perubahan (Semua Aman)', 'alker_mass_confirm')],
-      [Markup.button.callback('📝 Rincian & Update Per Alat', 'alker_list_items')],
-      [Markup.button.callback('🔄 Refresh Data', `alker_refresh_${encodeURIComponent(techNik || techName)}`)]
-    ];
+    let buttons = [];
+    if (isOwner) {
+      card += `👇 <i>Pilih tombol cepat jika semua alat aman, atau klik rincian untuk update alat tertentu:</i>`;
+      buttons = [
+        [Markup.button.callback('✅ Tidak Ada Perubahan (Semua Aman)', 'alker_mass_confirm')],
+        [Markup.button.callback('📝 Rincian & Update Per Alat', 'alker_list_items')],
+        [Markup.button.callback('🔄 Refresh Data', `alker_refresh_${encodeURIComponent(techNik || techName)}`)]
+      ];
+    } else {
+      card += `🔒 <b>Mode Lihat (Read-Only)</b>\n<i>Anda sedang melihat data milik ${escapeHtml(techName)}. Anda tidak dapat mengubah data ini karena bukan pemilik akun.</i>`;
+      buttons = [
+        [Markup.button.callback('📋 Rincian Alat (Mode Lihat)', 'alker_list_items_readonly')],
+        [Markup.button.callback('🔄 Refresh Data', `alker_refresh_${encodeURIComponent(techNik || techName)}`)]
+      ];
+    }
 
     return ctx.reply(card, {
       parse_mode: 'HTML',
@@ -329,6 +344,10 @@ async function handleAlkerCallback(ctx) {
       return true;
     }
 
+    if (!session.isOwner) {
+      return ctx.answerCbQuery('🚫 Akses Ditolak: Anda tidak dapat mengupdate alker milik teknisi lain!', { show_alert: true });
+    }
+
     await ctx.answerCbQuery('Menyimpan konfirmasi alker...').catch(() => {});
     const loading = await ctx.reply('⏳ <i>Menyimpan update mingguan alker...</i>', { parse_mode: 'HTML' });
 
@@ -382,10 +401,50 @@ async function handleAlkerCallback(ctx) {
     return handleAlkerCommand(ctx, query);
   }
 
+  if (data === 'alker_list_items_readonly') {
+    if (!session || !session.alkers) {
+      await ctx.answerCbQuery('Sesi telah kedaluwarsa. Silakan ketik /alker kembali.').catch(() => {});
+      return true;
+    }
+
+    await ctx.answerCbQuery().catch(() => {});
+    let listText = `📋 <b>RINCIAN ALKER (MODE LIHAT)</b>\n`;
+    listText += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    listText += `👤 <b>Teknisi:</b> ${escapeHtml(session.techName)} (${session.techNik})\n`;
+    listText += `🏢 <b>Sektor :</b> ${escapeHtml(session.sektor)}\n\n`;
+
+    session.alkers.forEach((item, idx) => {
+      const nama = item['Nama Alker'] || item['NAMA ALKER'] || `Item #${idx+1}`;
+      const status = (item['Status'] || item['STATUS'] || 'Normal').trim();
+      let icon = '🟢';
+      if (status.toLowerCase() === 'rusak') icon = '🔴';
+      else if (status.toLowerCase() === 'tidak ada' || status.toLowerCase() === 'hilang') icon = '❌';
+
+      listText += `${idx + 1}. ${icon} <b>${escapeHtml(nama)}</b>: <code>${escapeHtml(status)}</code>\n`;
+    });
+
+    listText += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    listText += `🔒 <i>Hanya pemilik akun (${escapeHtml(session.techName)}) yang berhak mengedit alker ini.</i>`;
+
+    const buttons = [
+      [Markup.button.callback('⬅️ Kembali', 'alker_back_main')]
+    ];
+
+    await ctx.editMessageText(listText, {
+      parse_mode: 'HTML',
+      ...Markup.inlineKeyboard(buttons)
+    }).catch(() => {});
+    return true;
+  }
+
   if (data === 'alker_list_items') {
     if (!session || !session.alkers) {
       await ctx.answerCbQuery('Sesi telah kedaluwarsa. Silakan ketik /alker kembali.').catch(() => {});
       return true;
+    }
+
+    if (!session.isOwner) {
+      return ctx.answerCbQuery('🚫 Akses Ditolak: Anda tidak dapat mengupdate alker milik teknisi lain!', { show_alert: true });
     }
 
     await ctx.answerCbQuery().catch(() => {});
@@ -423,6 +482,10 @@ async function handleAlkerCallback(ctx) {
     if (!session || !session.alkers || !session.alkers[idx]) {
       await ctx.answerCbQuery('Sesi kedaluwarsa. Ketik /alker lagi.').catch(() => {});
       return true;
+    }
+
+    if (!session.isOwner) {
+      return ctx.answerCbQuery('🚫 Akses Ditolak: Anda tidak dapat mengupdate alker milik teknisi lain!', { show_alert: true });
     }
 
     const selected = session.alkers[idx];
