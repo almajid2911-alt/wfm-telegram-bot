@@ -470,9 +470,9 @@ function renderAlkerFormHtml(initialTechs = []) {
             '</div>' +
           '</div>' +
           '<div class="grid grid-cols-3 gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800/80 text-xs font-semibold">' +
-            '<button type="button" onclick="setItemStatus(' + idx + ', \'Normal\')" id="btnSt_' + idx + '_Normal" class="st-btn py-1.5 rounded-lg text-center transition ' + (stVal === 'Normal' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-sm' : 'text-slate-400 hover:text-slate-200') + '">🟢 Normal</button>' +
-            '<button type="button" onclick="setItemStatus(' + idx + ', \'Rusak\')" id="btnSt_' + idx + '_Rusak" class="st-btn py-1.5 rounded-lg text-center transition ' + (stVal === 'Rusak' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-sm' : 'text-slate-400 hover:text-slate-200') + '">🔴 Rusak</button>' +
-            '<button type="button" onclick="setItemStatus(' + idx + ', \'Tidak ada\')" id="btnSt_' + idx + '_Tidak_ada" class="st-btn py-1.5 rounded-lg text-center transition ' + (stVal === 'Tidak ada' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-sm' : 'text-slate-400 hover:text-slate-200') + '">❌ Hilang</button>' +
+            '<button type="button" onclick="setItemStatus(' + idx + ', &quot;Normal&quot;)" id="btnSt_' + idx + '_Normal" class="st-btn py-1.5 rounded-lg text-center transition ' + (stVal === 'Normal' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-sm' : 'text-slate-400 hover:text-slate-200') + '">🟢 Normal</button>' +
+            '<button type="button" onclick="setItemStatus(' + idx + ', &quot;Rusak&quot;)" id="btnSt_' + idx + '_Rusak" class="st-btn py-1.5 rounded-lg text-center transition ' + (stVal === 'Rusak' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-sm' : 'text-slate-400 hover:text-slate-200') + '">🔴 Rusak</button>' +
+            '<button type="button" onclick="setItemStatus(' + idx + ', &quot;Tidak ada&quot;)" id="btnSt_' + idx + '_Tidak_ada" class="st-btn py-1.5 rounded-lg text-center transition ' + (stVal === 'Tidak ada' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-sm' : 'text-slate-400 hover:text-slate-200') + '">❌ Hilang</button>' +
           '</div>' +
           '<div id="notesBox_' + idx + '" class="' + (stVal === 'Normal' ? 'hidden' : '') + ' pt-1 space-y-1">' +
             '<input type="text" id="noteInput_' + idx + '" value="' + (item['Keterangan'] || '') + '" placeholder="Alasan kerusakan / kondisi fisik..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-rose-500">' +
@@ -540,7 +540,7 @@ function renderAlkerFormHtml(initialTechs = []) {
       }
 
       if (!isSecurityVerified) {
-        alert('⚠️ Verifikasi OTP Diperlukan!\nSilakan klik tombol "Minta Kode OTP ke Telegram Saya" dan masukkan 6 digit kodenya sebelum menyimpan.');
+        alert('⚠️ Verifikasi OTP Diperlukan!\\nSilakan klik tombol Minta Kode OTP ke Telegram Saya dan masukkan 6 digit kodenya sebelum menyimpan.');
         document.getElementById('inputOtpOrPin').focus();
         return;
       }
