@@ -148,7 +148,7 @@ async function getDashboardData() {
 }
 
 /**
- * Template HTML Modern Dashboard SPV dengan Ekspor CSV & Print
+ * Template HTML Unified Enterprise SPV Portal Dashboard
  */
 function renderDashboardHtml() {
   return `<!DOCTYPE html>
@@ -156,7 +156,7 @@ function renderDashboardHtml() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard Monitoring Alker WFM</title>
+  <title>WFM Enterprise Management Portal</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -184,35 +184,41 @@ function renderDashboardHtml() {
     ::-webkit-scrollbar-track { background: #0f172a; }
     ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
     @media print {
-      header, .no-print { display: none !important; }
+      header, nav, .no-print { display: none !important; }
       body { background: #fff !important; color: #000 !important; }
       table { border-collapse: collapse; width: 100%; font-size: 10px; }
       th, td { border: 1px solid #ddd !important; color: #000 !important; }
     }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen">
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
 
   <!-- TOP NAVBAR -->
-  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+  <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
       <div class="flex items-center space-x-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
-          <i class="fa-solid fa-toolbox text-white text-lg"></i>
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+          <i class="fa-solid fa-layer-group text-white text-lg"></i>
         </div>
         <div>
-          <h1 class="font-bold text-lg leading-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">WFM ALKER MONITORING</h1>
-          <p class="text-xs text-slate-400">Supervisor & Management Executive View</p>
+          <h1 class="font-bold text-base sm:text-lg leading-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">WFM ENTERPRISE HUB</h1>
+          <p class="text-[11px] text-slate-400">Batulicin, Kotabaru & Satui Operations</p>
         </div>
       </div>
-      <div class="flex items-center space-x-2.5">
+
+      <!-- Quick Shortcuts -->
+      <div class="flex items-center space-x-2">
+        <a href="https://scc.internetbisnis.biz.id" target="_blank" class="hidden md:inline-flex px-3 py-1.5 rounded-lg bg-indigo-950/80 hover:bg-indigo-900 text-xs font-medium text-indigo-300 transition items-center space-x-1.5 border border-indigo-800">
+          <i class="fa-solid fa-bolt text-amber-400"></i>
+          <span>Buka SCC Bypass</span>
+        </a>
         <button onclick="exportToCsv()" class="px-3 py-1.5 rounded-lg bg-emerald-950 hover:bg-emerald-900 text-xs font-semibold text-emerald-300 transition flex items-center space-x-1.5 border border-emerald-800">
           <i class="fa-solid fa-file-excel text-emerald-400"></i>
-          <span class="hidden sm:inline">Export Excel/CSV</span>
+          <span class="hidden sm:inline">Export Excel</span>
         </button>
         <button onclick="window.print()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 transition flex items-center space-x-1.5 border border-slate-700">
           <i class="fa-solid fa-print text-slate-400"></i>
-          <span class="hidden sm:inline">Cetak Rekap</span>
+          <span class="hidden sm:inline">Cetak</span>
         </button>
         <button onclick="loadData()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 transition flex items-center space-x-1.5 border border-slate-700">
           <i class="fa-solid fa-rotate text-blue-400" id="reloadIcon"></i>
@@ -220,173 +226,335 @@ function renderDashboardHtml() {
         </button>
       </div>
     </div>
+
+    <!-- NAVIGATION TABS -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-1 border-t border-slate-800/80 overflow-x-auto">
+      <button onclick="switchTab('alkerTab')" id="tabBtn-alkerTab" class="px-4 py-2.5 text-xs font-semibold border-b-2 border-blue-500 text-blue-400 flex items-center space-x-2 whitespace-nowrap">
+        <i class="fa-solid fa-toolbox"></i>
+        <span>Monitoring Alker SPV</span>
+      </button>
+      <button onclick="switchTab('waTab')" id="tabBtn-waTab" class="px-4 py-2.5 text-xs font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 whitespace-nowrap">
+        <i class="fa-brands fa-whatsapp text-emerald-400"></i>
+        <span>WhatsApp AI CS & QR</span>
+      </button>
+      <button onclick="switchTab('systemTab')" id="tabBtn-systemTab" class="px-4 py-2.5 text-xs font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 whitespace-nowrap">
+        <i class="fa-solid fa-server text-indigo-400"></i>
+        <span>Status VPS & Tools</span>
+      </button>
+    </div>
   </header>
 
-  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 flex-1 w-full">
 
-    <!-- KPI CARDS -->
-    <div class="grid grid-cols-2 lg:grid-cols-6 gap-3.5">
-      <!-- Total Alker -->
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm">
-        <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
-          <span>Total Alker</span>
-          <i class="fa-solid fa-boxes-stacked text-blue-400"></i>
-        </div>
-        <div class="mt-2 flex items-baseline justify-between">
-          <div class="text-2xl font-bold text-white" id="statTotalItems">-</div>
-          <span class="text-[11px] text-slate-500" id="statTotalTechs">- Naker</span>
-        </div>
-      </div>
+    <!-- ==================== TAB 1: ALKER MONITORING ==================== -->
+    <div id="alkerTab" class="tab-content space-y-6">
 
-      <!-- Normal % -->
-      <div class="bg-slate-900 border border-emerald-950/80 rounded-2xl p-4 shadow-sm relative overflow-hidden">
-        <div class="flex items-center justify-between text-emerald-400 text-xs font-medium">
-          <span>Kondisi Baik</span>
-          <i class="fa-solid fa-circle-check"></i>
-        </div>
-        <div class="mt-2 flex items-baseline justify-between">
-          <div class="text-2xl font-bold text-emerald-400" id="statNormalPercent">-</div>
-          <span class="text-[11px] font-semibold text-emerald-500" id="statNormalCount">- item</span>
-        </div>
-      </div>
-
-      <!-- Rusak -->
-      <div class="bg-slate-900 border border-rose-950/80 rounded-2xl p-4 shadow-sm relative overflow-hidden">
-        <div class="flex items-center justify-between text-rose-400 text-xs font-medium">
-          <span>Kondisi Rusak</span>
-          <i class="fa-solid fa-triangle-exclamation"></i>
-        </div>
-        <div class="mt-2 flex items-baseline justify-between">
-          <div class="text-2xl font-bold text-rose-400" id="statRusakCount">-</div>
-          <span class="text-[10px] px-1.5 py-0.5 rounded bg-rose-950 text-rose-300 font-medium">Urgent</span>
-        </div>
-      </div>
-
-      <!-- Hilang / Tidak Ada -->
-      <div class="bg-slate-900 border border-amber-950/80 rounded-2xl p-4 shadow-sm relative overflow-hidden">
-        <div class="flex items-center justify-between text-amber-400 text-xs font-medium">
-          <span>Hilang/Tidak Ada</span>
-          <i class="fa-solid fa-circle-xmark"></i>
-        </div>
-        <div class="mt-2 flex items-baseline justify-between">
-          <div class="text-2xl font-bold text-amber-400" id="statMissingCount">-</div>
-          <span class="text-[10px] text-amber-500">Pengadaan</span>
-        </div>
-      </div>
-
-      <!-- Kepatuhan Mingguan -->
-      <div class="bg-slate-900 border border-indigo-950/80 rounded-2xl p-4 shadow-sm">
-        <div class="flex items-center justify-between text-indigo-400 text-xs font-medium">
-          <span>Update Minggu Ini</span>
-          <i class="fa-solid fa-user-check"></i>
-        </div>
-        <div class="mt-2 flex items-baseline justify-between">
-          <div class="text-2xl font-bold text-indigo-300" id="statComplyCount">-</div>
-          <span class="text-[11px] text-indigo-400">Teknisi</span>
-        </div>
-      </div>
-
-      <!-- Overdue > 14 Hari -->
-      <div class="bg-gradient-to-br from-rose-950/40 to-slate-900 border border-rose-900/40 rounded-2xl p-4 shadow-sm col-span-2 lg:col-span-1">
-        <div class="flex items-center justify-between text-rose-300 text-xs font-medium">
-          <span>Overdue > 14 Hari</span>
-          <i class="fa-solid fa-user-clock"></i>
-        </div>
-        <div class="mt-2 flex items-baseline justify-between">
-          <div class="text-2xl font-bold text-rose-300" id="statOverdueCount">-</div>
-          <button onclick="filterIssuesOnly()" class="text-[11px] text-rose-400 hover:underline font-medium">Cek Masalah &rarr;</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- CHARTS SECTION -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-        <h3 class="text-sm font-semibold text-slate-300 mb-4 flex items-center">
-          <i class="fa-solid fa-chart-pie mr-2 text-blue-400"></i> Distribusi Kelayakan Alker
-        </h3>
-        <div class="h-56 relative flex items-center justify-center">
-          <canvas id="statusChart"></canvas>
-        </div>
-      </div>
-
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 lg:col-span-2">
-        <h3 class="text-sm font-semibold text-slate-300 mb-4 flex items-center">
-          <i class="fa-solid fa-chart-column mr-2 text-indigo-400"></i> Perbandingan Alker per Sektor
-        </h3>
-        <div class="h-56">
-          <canvas id="sectorChart"></canvas>
-        </div>
-      </div>
-    </div>
-
-    <!-- DATA TABLE & FILTERS -->
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h3 class="text-base font-semibold text-white">Daftar Inventaris Alker Seluruh Teknisi</h3>
-          <p class="text-xs text-slate-400">Pencarian berdasarkan NIK, Nama Teknisi, Sektor, atau SN</p>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
-          <div class="relative">
-            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-500 text-xs"></i>
-            <input type="text" id="searchInput" oninput="applyFilters()" placeholder="Cari NIK / Nama / Alat..." class="bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500 w-44 sm:w-60">
+      <!-- KPI CARDS -->
+      <div class="grid grid-cols-2 lg:grid-cols-6 gap-3.5">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm">
+          <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
+            <span>Total Alker</span>
+            <i class="fa-solid fa-boxes-stacked text-blue-400"></i>
           </div>
-          <select id="sektorFilter" onchange="applyFilters()" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500">
-            <option value="ALL">Semua Sektor</option>
-            <option value="BATULICIN">Batulicin</option>
-            <option value="KOTABARU">Kotabaru</option>
-            <option value="SATUI">Satui</option>
-            <option value="BANJARMASIN">Banjarmasin</option>
-          </select>
-          <select id="statusFilter" onchange="applyFilters()" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500">
-            <option value="ALL">Semua Status</option>
-            <option value="NORMAL">🟢 Normal</option>
-            <option value="RUSAK">🔴 Rusak</option>
-            <option value="MISSING">❌ Hilang / Tidak Ada</option>
-            <option value="ISSUES">⚠️ Hanya Bermasalah</option>
-          </select>
+          <div class="mt-2 flex items-baseline justify-between">
+            <div class="text-2xl font-bold text-white" id="statTotalItems">-</div>
+            <span class="text-[11px] text-slate-500" id="statTotalTechs">- Naker</span>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 border border-emerald-950/80 rounded-2xl p-4 shadow-sm">
+          <div class="flex items-center justify-between text-emerald-400 text-xs font-medium">
+            <span>Kondisi Baik</span>
+            <i class="fa-solid fa-circle-check"></i>
+          </div>
+          <div class="mt-2 flex items-baseline justify-between">
+            <div class="text-2xl font-bold text-emerald-400" id="statNormalPercent">-</div>
+            <span class="text-[11px] font-semibold text-emerald-500" id="statNormalCount">- item</span>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 border border-rose-950/80 rounded-2xl p-4 shadow-sm">
+          <div class="flex items-center justify-between text-rose-400 text-xs font-medium">
+            <span>Kondisi Rusak</span>
+            <i class="fa-solid fa-triangle-exclamation"></i>
+          </div>
+          <div class="mt-2 flex items-baseline justify-between">
+            <div class="text-2xl font-bold text-rose-400" id="statRusakCount">-</div>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-rose-950 text-rose-300 font-medium">Urgent</span>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 border border-amber-950/80 rounded-2xl p-4 shadow-sm">
+          <div class="flex items-center justify-between text-amber-400 text-xs font-medium">
+            <span>Hilang/Tidak Ada</span>
+            <i class="fa-solid fa-circle-xmark"></i>
+          </div>
+          <div class="mt-2 flex items-baseline justify-between">
+            <div class="text-2xl font-bold text-amber-400" id="statMissingCount">-</div>
+            <span class="text-[10px] text-amber-500">Pengadaan</span>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 border border-indigo-950/80 rounded-2xl p-4 shadow-sm">
+          <div class="flex items-center justify-between text-indigo-400 text-xs font-medium">
+            <span>Update Minggu Ini</span>
+            <i class="fa-solid fa-user-check"></i>
+          </div>
+          <div class="mt-2 flex items-baseline justify-between">
+            <div class="text-2xl font-bold text-indigo-300" id="statComplyCount">-</div>
+            <span class="text-[11px] text-indigo-400">Teknisi</span>
+          </div>
+        </div>
+
+        <div class="bg-gradient-to-br from-rose-950/40 to-slate-900 border border-rose-900/40 rounded-2xl p-4 shadow-sm col-span-2 lg:col-span-1">
+          <div class="flex items-center justify-between text-rose-300 text-xs font-medium">
+            <span>Overdue > 14 Hari</span>
+            <i class="fa-solid fa-user-clock"></i>
+          </div>
+          <div class="mt-2 flex items-baseline justify-between">
+            <div class="text-2xl font-bold text-rose-300" id="statOverdueCount">-</div>
+            <button onclick="filterIssuesOnly()" class="text-[11px] text-rose-400 hover:underline font-medium">Cek Masalah &rarr;</button>
+          </div>
         </div>
       </div>
 
-      <!-- TABLE CONTAINER -->
-      <div class="overflow-x-auto rounded-xl border border-slate-800">
-        <table class="w-full text-left text-xs text-slate-300" id="alkerTable">
-          <thead class="bg-slate-950/80 text-slate-400 font-semibold border-b border-slate-800">
-            <tr>
-              <th class="py-3 px-3">No</th>
-              <th class="py-3 px-3">SN / ID</th>
-              <th class="py-3 px-4">Nama Alker</th>
-              <th class="py-3 px-4">Nama Teknisi</th>
-              <th class="py-3 px-3">NIK</th>
-              <th class="py-3 px-3">Sektor</th>
-              <th class="py-3 px-3">Status</th>
-              <th class="py-3 px-4">Keterangan Kerusakan</th>
-              <th class="py-3 px-3 text-right">Last Update</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-800/60 font-normal" id="tableBody">
-            <tr>
-              <td colspan="9" class="text-center py-8 text-slate-500">
-                <i class="fa-solid fa-spinner fa-spin mr-2"></i> Memuat data inventaris...
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <!-- CHARTS SECTION -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <h3 class="text-sm font-semibold text-slate-300 mb-4 flex items-center">
+            <i class="fa-solid fa-chart-pie mr-2 text-blue-400"></i> Distribusi Kelayakan Alker
+          </h3>
+          <div class="h-56 relative flex items-center justify-center">
+            <canvas id="statusChart"></canvas>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 lg:col-span-2">
+          <h3 class="text-sm font-semibold text-slate-300 mb-4 flex items-center">
+            <i class="fa-solid fa-chart-column mr-2 text-indigo-400"></i> Perbandingan Alker per Sektor
+          </h3>
+          <div class="h-56">
+            <canvas id="sectorChart"></canvas>
+          </div>
+        </div>
       </div>
 
-      <div class="flex items-center justify-between text-xs text-slate-500 pt-2">
-        <span id="filteredCount">Memuat data...</span>
-        <span>Google Spreadsheet Real-time Source</span>
+      <!-- DATA TABLE & FILTERS -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h3 class="text-base font-semibold text-white">Daftar Inventaris Alker Seluruh Teknisi</h3>
+            <p class="text-xs text-slate-400">Pencarian berdasarkan NIK, Nama Teknisi, Sektor, atau SN</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="relative">
+              <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-500 text-xs"></i>
+              <input type="text" id="searchInput" oninput="applyFilters()" placeholder="Cari NIK / Nama / Alat..." class="bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500 w-44 sm:w-60">
+            </div>
+            <select id="sektorFilter" onchange="applyFilters()" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500">
+              <option value="ALL">Semua Sektor</option>
+              <option value="BATULICIN">Batulicin</option>
+              <option value="KOTABARU">Kotabaru</option>
+              <option value="SATUI">Satui</option>
+              <option value="BANJARMASIN">Banjarmasin</option>
+            </select>
+            <select id="statusFilter" onchange="applyFilters()" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500">
+              <option value="ALL">Semua Status</option>
+              <option value="NORMAL">🟢 Normal</option>
+              <option value="RUSAK">🔴 Rusak</option>
+              <option value="MISSING">❌ Hilang / Tidak Ada</option>
+              <option value="ISSUES">⚠️ Hanya Bermasalah</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- TABLE CONTAINER -->
+        <div class="overflow-x-auto rounded-xl border border-slate-800">
+          <table class="w-full text-left text-xs text-slate-300" id="alkerTable">
+            <thead class="bg-slate-950/80 text-slate-400 font-semibold border-b border-slate-800">
+              <tr>
+                <th class="py-3 px-3">No</th>
+                <th class="py-3 px-3">SN / ID</th>
+                <th class="py-3 px-4">Nama Alker</th>
+                <th class="py-3 px-4">Nama Teknisi</th>
+                <th class="py-3 px-3">NIK</th>
+                <th class="py-3 px-3">Sektor</th>
+                <th class="py-3 px-3">Status</th>
+                <th class="py-3 px-4">Keterangan Kerusakan</th>
+                <th class="py-3 px-3 text-right">Last Update</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/60 font-normal" id="tableBody">
+              <tr>
+                <td colspan="9" class="text-center py-8 text-slate-500">
+                  <i class="fa-solid fa-spinner fa-spin mr-2"></i> Memuat data inventaris...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="flex items-center justify-between text-xs text-slate-500 pt-2">
+          <span id="filteredCount">Memuat data...</span>
+          <span>Google Spreadsheet Real-time Source</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ==================== TAB 2: WHATSAPP CS CONTROL ==================== -->
+    <div id="waTab" class="tab-content hidden space-y-6">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-6">
+          <div class="flex items-center space-x-3">
+            <div class="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-2xl border border-emerald-500/30">
+              <i class="fa-brands fa-whatsapp"></i>
+            </div>
+            <div>
+              <h2 class="text-lg font-bold text-white">WhatsApp AI Customer Service</h2>
+              <p class="text-xs text-slate-400">Asisten Pendaftaran & Lead Generator Otomatis</p>
+            </div>
+          </div>
+          <div class="flex items-center space-x-3">
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse mr-2"></span> Active on VPS
+            </span>
+            <a href="http://wa.103.93.129.213.sslip.io/qr" target="_blank" class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white transition flex items-center space-x-1.5 shadow-lg shadow-emerald-600/20">
+              <i class="fa-solid fa-qrcode"></i>
+              <span>Buka Layar QR Scanner</span>
+            </a>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+          <div class="bg-slate-950 border border-slate-800/80 rounded-xl p-4 space-y-2">
+            <div class="text-xs text-slate-400 font-medium">Nomor WhatsApp Terhubung</div>
+            <div class="text-lg font-bold text-white font-mono">+62 813-5033-0220</div>
+            <div class="text-[11px] text-slate-500">Auto follow-up 3 jam aktif</div>
+          </div>
+
+          <div class="bg-slate-950 border border-slate-800/80 rounded-xl p-4 space-y-2">
+            <div class="text-xs text-slate-400 font-medium">Integrasi Notifikasi Lead</div>
+            <div class="text-lg font-bold text-emerald-400">Grup Telegram Sales</div>
+            <div class="text-[11px] text-slate-500">Auto send leads & bukti foto KTP/lokasi</div>
+          </div>
+
+          <div class="bg-slate-950 border border-slate-800/80 rounded-xl p-4 space-y-2">
+            <div class="text-xs text-slate-400 font-medium">Database Leads</div>
+            <div class="text-lg font-bold text-blue-400">Google Sheet Leads</div>
+            <div class="text-[11px] text-slate-500">Tersinkronisasi real-time</div>
+          </div>
+        </div>
+
+        <!-- Embedded QR frame view -->
+        <div class="mt-6 border border-slate-800 rounded-xl p-4 bg-slate-950/60 text-center">
+          <h4 class="text-xs font-semibold text-slate-300 mb-3">Live QR & Session Monitor</h4>
+          <iframe src="http://wa.103.93.129.213.sslip.io" class="w-full h-72 rounded-lg border border-slate-800 bg-slate-900"></iframe>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== TAB 3: SYSTEM & TOOLS ==================== -->
+    <div id="systemTab" class="tab-content hidden space-y-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        <!-- Tools Shortcuts Card -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+          <h3 class="text-base font-bold text-white flex items-center">
+            <i class="fa-solid fa-rocket mr-2 text-indigo-400"></i> Ekosistem Layanan & Tool Pintas
+          </h3>
+          <div class="space-y-3">
+            <a href="https://scc.internetbisnis.biz.id" target="_blank" class="block p-3.5 rounded-xl bg-slate-950 hover:bg-slate-800/60 border border-slate-800 transition">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                  <div class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center text-sm">
+                    <i class="fa-solid fa-bolt"></i>
+                  </div>
+                  <div>
+                    <div class="text-xs font-semibold text-white">SCC Fast Bypass Web</div>
+                    <div class="text-[11px] text-slate-400">Berjalan di Mini PC / Cloudflare Tunnel</div>
+                  </div>
+                </div>
+                <i class="fa-solid fa-arrow-up-right-from-square text-xs text-slate-500"></i>
+              </div>
+            </a>
+
+            <a href="http://103.93.129.213:8000" target="_blank" class="block p-3.5 rounded-xl bg-slate-950 hover:bg-slate-800/60 border border-slate-800 transition">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                  <div class="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center text-sm">
+                    <i class="fa-solid fa-sliders"></i>
+                  </div>
+                  <div>
+                    <div class="text-xs font-semibold text-white">Coolify Server Panel</div>
+                    <div class="text-[11px] text-slate-400">Kelola 4 bot, log, restart & resource VPS</div>
+                  </div>
+                </div>
+                <i class="fa-solid fa-arrow-up-right-from-square text-xs text-slate-500"></i>
+              </div>
+            </a>
+          </div>
+        </div>
+
+        <!-- VPS Health & Specs Card -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+          <h3 class="text-base font-bold text-white flex items-center">
+            <i class="fa-solid fa-shield-halved mr-2 text-emerald-400"></i> Status Keamanan & Spesifikasi Server
+          </h3>
+          <div class="space-y-3 text-xs">
+            <div class="flex justify-between items-center py-2 border-b border-slate-800">
+              <span class="text-slate-400">Provider & Region</span>
+              <span class="font-semibold text-slate-200">Biznet Gio (West Java)</span>
+            </div>
+            <div class="flex justify-between items-center py-2 border-b border-slate-800">
+              <span class="text-slate-400">Kapasitas RAM</span>
+              <span class="font-semibold text-emerald-400">4 GB Fisik + 2 GB Swap (Lega 65%)</span>
+            </div>
+            <div class="flex justify-between items-center py-2 border-b border-slate-800">
+              <span class="text-slate-400">Status Firewall (UFW)</span>
+              <span class="font-semibold text-emerald-400">🛡️ Terkunci (Hanya Port 22, 80, 443, 8000)</span>
+            </div>
+            <div class="flex justify-between items-center py-2">
+              <span class="text-slate-400">Auto Maintenance</span>
+              <span class="font-semibold text-blue-400">Mingguan (Docker Auto Prune & Backup)</span>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
 
   </main>
 
+  <!-- FOOTER -->
+  <footer class="border-t border-slate-800/80 bg-slate-900/40 py-4 text-center text-xs text-slate-500">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <span>WFM Enterprise Management System &bull; Self-Hosted on Biznet Cloud</span>
+      <span class="font-mono text-[11px] text-slate-600">v3.0.0 Enterprise Stable</span>
+    </div>
+  </footer>
+
   <script>
     let globalItems = [];
     let statusChartInst = null;
     let sectorChartInst = null;
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById(tabId).classList.remove('hidden');
+
+      const tabs = ['alkerTab', 'waTab', 'systemTab'];
+      tabs.forEach(t => {
+        const btn = document.getElementById('tabBtn-' + t);
+        if (btn) {
+          if (t === tabId) {
+            btn.className = 'px-4 py-2.5 text-xs font-semibold border-b-2 border-blue-500 text-blue-400 flex items-center space-x-2 whitespace-nowrap';
+          } else {
+            btn.className = 'px-4 py-2.5 text-xs font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 whitespace-nowrap';
+          }
+        }
+      });
+    }
 
     async function loadData() {
       const icon = document.getElementById('reloadIcon');
@@ -412,7 +580,7 @@ function renderDashboardHtml() {
         renderCharts(d);
         applyFilters();
       } catch (err) {
-        alert('Gagal mengambil data: ' + err.message);
+        console.warn('Gagal memuat data:', err.message);
       } finally {
         if (icon) icon.classList.remove('fa-spin');
       }
