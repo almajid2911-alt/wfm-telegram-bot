@@ -216,10 +216,12 @@ if (interactiveBot) {
 }
 
 // -------------------------------------------------------------
-// 3. HTTP SERVER — Health Check + Webhook Endpoint
+// 3. HTTP SERVER — Web Dashboard + Webhook Endpoint
 // -------------------------------------------------------------
+const { getDashboardData, renderDashboardHtml } = require('./web/dashboard');
+
 const server = http.createServer(async (req, res) => {
-  // ✅ Webhook endpoint — menerima update dari Telegram
+  // ✅ 1. Webhook endpoint — menerima update dari Telegram
   if (req.method === 'POST' && req.url === WEBHOOK_PATH) {
     let body = '';
     req.on('data', (chunk) => { body += chunk.toString(); });
@@ -238,13 +240,40 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // ✅ Health check
+  // ✅ 2. API Endpoint Data Alker JSON
+  if (req.method === 'GET' && req.url.startsWith('/api/alker')) {
+    try {
+      const data = await getDashboardData();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, data }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: err.message }));
+    }
+    return;
+  }
+
+  // ✅ 3. Tampilan Web Dashboard SPV Monitoring Alker
+  if (req.method === 'GET' && (req.url === '/' || req.url === '/alker' || req.url === '/dashboard')) {
+    try {
+      const data = await getDashboardData();
+      const html = renderDashboardHtml(data);
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(html);
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(`<h3>Gagal memuat Dashboard: ${err.message}</h3>`);
+    }
+    return;
+  }
+
+  // ✅ 4. Health check
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({
     status: 'ONLINE',
     mode: 'WEBHOOK',
-    webhook: WEBHOOK_URL,
-    service: 'WFM Telegram Bot',
+    dashboard: `https://${WEBHOOK_DOMAIN}/alker`,
+    service: 'WFM Telegram Bot & Alker Dashboard',
     time: new Date().toISOString(),
     timezone: TIMEZONE
   }));
