@@ -1,12 +1,31 @@
 /**
- * Mobile-First Web Mini App for Alker Checklist with Server-Side Rendered Tech List & OTP Verification
+ * Mobile-First Web Mini App for Alker Checklist with Strict Sector Filtering, Search, & OTP Verification
  */
+
+function getSectorGroup(psa) {
+  const p = (psa || '').toUpperCase().trim();
+  // SATUI: Satui, Kintap, Alkautsar, Pagatan, Angsana, Sebamban
+  if (['SATUI', 'KINTAP', 'ALKAUTSAR', 'AL-KAUTSAR', 'PAGATAN', 'ANGSANA', 'SEBAMBAN', 'STI', 'KIP', 'PGT'].some(s => p.includes(s))) {
+    return 'SATUI';
+  }
+  // KOTABARU: Kotabaru, Lontar, Stagen
+  if (['KOTABARU', 'KTB', 'LONTAR', 'LTR', 'STAGEN', 'KPL'].some(s => p.includes(s))) {
+    return 'KOTABARU';
+  }
+  // BATULICIN: Batulicin, Serongga, Cantung, Sungai Durian, Tarjun, Bakau, Batu Besar, Mantewe, Banjarmasin
+  return 'BATULICIN';
+}
 
 function renderAlkerFormHtml(initialTechs = []) {
   const safeJsonTechs = JSON.stringify(initialTechs || []);
-  const initialOptions = (initialTechs && initialTechs.length > 0)
-    ? initialTechs.map(t => `<option value="${t.name}">[${t.sektor || 'BLC'}] ${t.name} (NIK: ${t.nik})</option>`).join('')
-    : '';
+  
+  // Pre-filter default to BATULICIN
+  const defaultSector = 'BATULICIN';
+  const defaultFiltered = initialTechs.filter(t => getSectorGroup(t.sektor) === defaultSector);
+  const initialOptions = defaultFiltered
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(t => `<option value="${t.name}">[${t.sektor || 'BLC'}] ${t.name}</option>`)
+    .join('');
 
   return `<!DOCTYPE html>
 <html lang="id" class="dark">
@@ -61,36 +80,41 @@ function renderAlkerFormHtml(initialTechs = []) {
 
   <main class="max-w-lg mx-auto w-full px-4 pt-4 space-y-4 flex-1">
 
-    <!-- STEP 1: PILIH TEKNISI -->
+    <!-- STEP 1: PILIH SEKTOR & TEKNISI -->
     <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-sm space-y-3" id="sectionTechPicker">
       <div class="flex items-center justify-between border-b border-slate-800/80 pb-2">
         <span class="text-xs font-bold text-slate-300 flex items-center">
           <i class="fa-solid fa-user-check text-emerald-400 mr-2"></i> 1. Identitas Teknisi
         </span>
-        <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-mono" id="badgeSektor">SEMUA SEKTOR</span>
+        <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-mono font-bold" id="badgeSektor">SEKTOR BATULICIN</span>
       </div>
 
-      <!-- Sektor Buttons -->
-      <div class="grid grid-cols-4 gap-1.5" id="sektorButtonGroup">
-        <button type="button" onclick="selectSector('ALL')" id="btnSektor_ALL" class="sektor-btn py-2 px-1 rounded-xl text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition">
-          🌐 Semua
-        </button>
-        <button type="button" onclick="selectSector('BATULICIN')" id="btnSektor_BATULICIN" class="sektor-btn py-2 px-1 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700/80 transition">
+      <!-- Sektor Buttons (3 Pilihan Rapi) -->
+      <div class="grid grid-cols-3 gap-2" id="sektorButtonGroup">
+        <button type="button" onclick="selectSector('BATULICIN')" id="btnSektor_BATULICIN" class="sektor-btn py-2.5 px-2 rounded-xl text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition text-center shadow-sm">
           🏢 Batulicin
         </button>
-        <button type="button" onclick="selectSector('SATUI')" id="btnSektor_SATUI" class="sektor-btn py-2 px-1 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700/80 transition">
+        <button type="button" onclick="selectSector('SATUI')" id="btnSektor_SATUI" class="sektor-btn py-2.5 px-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700/80 transition text-center">
           🏢 Satui
         </button>
-        <button type="button" onclick="selectSector('KOTABARU')" id="btnSektor_KOTABARU" class="sektor-btn py-2 px-1 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700/80 transition">
+        <button type="button" onclick="selectSector('KOTABARU')" id="btnSektor_KOTABARU" class="sektor-btn py-2.5 px-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700/80 transition text-center">
           🏢 Kotabaru
         </button>
       </div>
 
-      <!-- Dropdown Nama Teknisi (Pre-Rendered) -->
-      <div class="space-y-1">
-        <label class="text-[11px] text-slate-400 font-medium">Pilih Nama Teknisi:</label>
+      <!-- Pencarian & Dropdown Nama Teknisi -->
+      <div class="space-y-1.5">
+        <div class="flex justify-between items-center text-[11px] text-slate-400">
+          <span class="font-medium">Pilih Nama Teknisi:</span>
+          <span class="text-[10px] text-slate-500" id="techCountLabel">${defaultFiltered.length} Teknisi</span>
+        </div>
+        
+        <!-- Search Filter Input -->
+        <input type="text" id="techSearch" oninput="filterTechList()" placeholder="🔍 Cari nama teknisi..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500">
+        
+        <!-- Dropdown -->
         <select id="techSelect" onchange="onTechSelected()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 font-medium">
-          <option value="">-- Pilih Nama Teknisi (${initialTechs.length} Orang) --</option>
+          <option value="">-- Pilih Nama Teknisi --</option>
           ${initialOptions}
         </select>
       </div>
@@ -194,48 +218,48 @@ function renderAlkerFormHtml(initialTechs = []) {
   </div>
 
   <script>
-    let allTechs = ${safeJsonTechs};
-    let currentSector = 'ALL';
-    let currentTech = null;
-    let currentAlkers = [];
-    let isSecurityVerified = false;
-    let verifiedAuthToken = '';
+    var allTechs = ${safeJsonTechs};
+    var currentSector = '${defaultSector}';
+    var currentTech = null;
+    var currentAlkers = [];
+    var isSecurityVerified = false;
+    var verifiedAuthToken = '';
 
     // URL Params parsing
-    const urlParams = new URLSearchParams(window.location.search);
-    const paramTech = urlParams.get('tech') || urlParams.get('nama') || '';
-    const paramNik = urlParams.get('nik') || '';
-    const paramSektor = (urlParams.get('sektor') || '').toUpperCase();
+    var urlParams = new URLSearchParams(window.location.search);
+    var paramTech = urlParams.get('tech') || urlParams.get('nama') || '';
+    var paramNik = urlParams.get('nik') || '';
+    var paramSektor = (urlParams.get('sektor') || '').toUpperCase();
 
     function getSectorGroup(psa) {
-      const p = (psa || '').toUpperCase().trim();
+      var p = (psa || '').toUpperCase().trim();
       // SATUI: Satui, Kintap, Alkautsar, Pagatan, Angsana, Sebamban
-      if (['SATUI', 'KINTAP', 'ALKAUTSAR', 'AL-KAUTSAR', 'PAGATAN', 'ANGSANA', 'SEBAMBAN', 'STI', 'KIP', 'PGT'].some(s => p.includes(s))) {
+      if (['SATUI', 'KINTAP', 'ALKAUTSAR', 'AL-KAUTSAR', 'PAGATAN', 'ANGSANA', 'SEBAMBAN', 'STI', 'KIP', 'PGT'].some(function(s) { return p.indexOf(s) !== -1; })) {
         return 'SATUI';
       }
       // KOTABARU: Kotabaru, Lontar, Stagen
-      if (['KOTABARU', 'KTB', 'LONTAR', 'LTR', 'STAGEN', 'KPL'].some(s => p.includes(s))) {
+      if (['KOTABARU', 'KTB', 'LONTAR', 'LTR', 'STAGEN', 'KPL'].some(function(s) { return p.indexOf(s) !== -1; })) {
         return 'KOTABARU';
       }
-      // BATULICIN: Batulicin, Serongga, Cantung, Sungai Durian, Tarjun, Bakau, Batu Besar, Mantewe
+      // BATULICIN: Batulicin, Serongga, Cantung, Sungai Durian, Tarjun, Bakau, Batu Besar, Mantewe, Banjarmasin
       return 'BATULICIN';
     }
 
     function initForm() {
-      if (paramSektor && ['BATULICIN', 'SATUI', 'KOTABARU'].includes(paramSektor)) {
+      if (paramSektor && ['BATULICIN', 'SATUI', 'KOTABARU'].indexOf(paramSektor) !== -1) {
         selectSector(paramSektor);
       } else {
-        selectSector('ALL');
+        selectSector('BATULICIN');
       }
 
       // Auto select if query params provided
       if (paramNik || paramTech) {
-        const found = allTechs.find(t => 
-          (paramNik && t.nik === paramNik) ||
-          (paramTech && t.name.toLowerCase().includes(paramTech.toLowerCase()))
-        );
+        var found = allTechs.find(function(t) { 
+          return (paramNik && t.nik === paramNik) ||
+            (paramTech && t.name.toLowerCase().indexOf(paramTech.toLowerCase()) !== -1);
+        });
         if (found) {
-          const sec = getSectorGroup(found.sektor);
+          var sec = getSectorGroup(found.sektor);
           selectSector(sec);
           document.getElementById('techSelect').value = found.name;
           onTechSelected();
@@ -245,34 +269,56 @@ function renderAlkerFormHtml(initialTechs = []) {
 
     function selectSector(sektor) {
       currentSector = sektor;
-      document.getElementById('badgeSektor').innerText = sektor === 'ALL' ? 'SEMUA SEKTOR' : 'SEKTOR ' + sektor;
-      document.querySelectorAll('.sektor-btn').forEach(b => {
-        b.className = 'sektor-btn py-2 px-1 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700/80 transition';
+      document.getElementById('badgeSektor').innerText = 'SEKTOR ' + sektor;
+      
+      // Update button styling
+      document.querySelectorAll('.sektor-btn').forEach(function(b) {
+        b.className = 'sektor-btn py-2.5 px-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700/80 transition text-center';
       });
-      const activeBtn = document.getElementById('btnSektor_' + sektor);
+      var activeBtn = document.getElementById('btnSektor_' + sektor);
       if (activeBtn) {
-        activeBtn.className = 'sektor-btn py-2 px-1 rounded-xl text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition';
+        activeBtn.className = 'sektor-btn py-2.5 px-2 rounded-xl text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition text-center shadow-sm';
       }
 
-      // Populate Tech Dropdown
-      let filtered = allTechs;
-      if (sektor !== 'ALL') {
-        filtered = allTechs.filter(t => getSectorGroup(t.sektor) === sektor || (t.sektor && t.sektor.toUpperCase().includes(sektor)));
+      // Reset search box
+      var searchBox = document.getElementById('techSearch');
+      if (searchBox) searchBox.value = '';
+
+      filterTechList();
+    }
+
+    function filterTechList() {
+      var searchInput = document.getElementById('techSearch');
+      var searchVal = (searchInput ? searchInput.value : '').trim().toLowerCase();
+      
+      var filtered = allTechs.filter(function(t) { return getSectorGroup(t.sektor) === currentSector; });
+      if (searchVal) {
+        filtered = filtered.filter(function(t) { 
+          return t.name.toLowerCase().indexOf(searchVal) !== -1 || 
+            (t.nik && t.nik.indexOf(searchVal) !== -1) ||
+            (t.sektor && t.sektor.toLowerCase().indexOf(searchVal) !== -1);
+        });
       }
 
-      const select = document.getElementById('techSelect');
+      // Sort alphabetically
+      filtered.sort(function(a, b) { return a.name.localeCompare(b.name); });
+
+      var countLabel = document.getElementById('techCountLabel');
+      if (countLabel) countLabel.innerText = filtered.length + ' Teknisi';
+
+      var select = document.getElementById('techSelect');
       if (!filtered.length) {
-        select.innerHTML = '<option value="">-- Tidak ada teknisi di sektor ini --</option>';
+        select.innerHTML = '<option value="">-- Tidak ada teknisi ditemukan --</option>';
         return;
       }
 
       select.innerHTML = '<option value="">-- Pilih Nama Teknisi (' + filtered.length + ' Orang) --</option>' + 
-        filtered.map(t => \`<option value="\${t.name}">[\${t.sektor || 'BLC'}] \${t.name} (NIK: \${t.nik})</option>\`).join('');
+        filtered.map(function(t) { return '<option value="' + t.name + '">[' + (t.sektor || 'BLC') + '] ' + t.name + '</option>'; }).join('');
     }
 
     async function onTechSelected() {
-      const select = document.getElementById('techSelect');
-      const selectedName = select.value;
+      var select = document.getElementById('techSelect');
+      var selectedName = select.value;
       isSecurityVerified = false;
       verifiedAuthToken = '';
 
@@ -281,16 +327,11 @@ function renderAlkerFormHtml(initialTechs = []) {
         document.getElementById('sectionSecurity').classList.add('hidden');
         document.getElementById('sectionQuickAction').classList.add('hidden');
         document.getElementById('floatingSubmitBar').classList.add('hidden');
-        document.getElementById('itemsContainer').innerHTML = \`
-          <div class="text-center py-10 text-slate-500 text-xs">
-            <i class="fa-solid fa-arrow-up text-lg mb-2 block text-emerald-400/60"></i>
-            Silakan pilih nama teknisi Anda di atas untuk memuat daftar alker.
-          </div>
-        \`;
+        document.getElementById('itemsContainer').innerHTML = '<div class="text-center py-10 text-slate-500 text-xs"><i class="fa-solid fa-arrow-up text-lg mb-2 block text-emerald-400/60"></i>Silakan pilih nama teknisi Anda di atas untuk memuat daftar alker.</div>';
         return;
       }
 
-      currentTech = allTechs.find(t => t.name === selectedName);
+      currentTech = allTechs.find(function(t) { return t.name === selectedName; });
       if (currentTech) {
         document.getElementById('lblNik').innerText = currentTech.nik || '-';
         document.getElementById('lblLeader').innerText = currentTech.leader || '-';
@@ -308,16 +349,11 @@ function renderAlkerFormHtml(initialTechs = []) {
       }
 
       // Fetch Alker list for this tech
-      document.getElementById('itemsContainer').innerHTML = \`
-        <div class="text-center py-12 text-slate-400 text-xs font-mono">
-          <i class="fa-solid fa-circle-notch fa-spin text-2xl text-emerald-400 mb-2 block"></i>
-          Mengambil 18 data alker milik \${selectedName}...
-        </div>
-      \`;
+      document.getElementById('itemsContainer').innerHTML = '<div class="text-center py-12 text-slate-400 text-xs font-mono"><i class="fa-solid fa-circle-notch fa-spin text-2xl text-emerald-400 mb-2 block"></i>Mengambil 18 data alker milik ' + selectedName + '...</div>';
 
       try {
-        const res = await fetch(\`/api/alker/tech-items?name=\${encodeURIComponent(selectedName)}\`);
-        const json = await res.json();
+        var res = await fetch('/api/alker/tech-items?name=' + encodeURIComponent(selectedName));
+        var json = await res.json();
         if (json.success && json.data) {
           currentAlkers = json.data;
           renderAlkerCards();
@@ -325,53 +361,53 @@ function renderAlkerFormHtml(initialTechs = []) {
           document.getElementById('floatingSubmitBar').classList.remove('hidden');
           updateCounter();
         } else {
-          document.getElementById('itemsContainer').innerHTML = \`<div class="text-center py-8 text-rose-400 text-xs">⚠️ Gagal memuat data alker: \${json.error || 'Data kosong'}</div>\`;
+          document.getElementById('itemsContainer').innerHTML = '<div class="text-center py-8 text-rose-400 text-xs">⚠️ Gagal memuat data alker: ' + (json.error || 'Data kosong') + '</div>';
         }
       } catch (err) {
-        document.getElementById('itemsContainer').innerHTML = \`<div class="text-center py-8 text-rose-400 text-xs">❌ Error: \${err.message}</div>\`;
+        document.getElementById('itemsContainer').innerHTML = '<div class="text-center py-8 text-rose-400 text-xs">❌ Error: ' + err.message + '</div>';
       }
     }
 
     async function requestTelegramOtp() {
       if (!currentTech) return;
-      const btn = document.getElementById('btnRequestOtp');
-      const txt = document.getElementById('txtRequestOtp');
-      const msg = document.getElementById('otpStatusMsg');
+      var btn = document.getElementById('btnRequestOtp');
+      var txt = document.getElementById('txtRequestOtp');
+      var msg = document.getElementById('otpStatusMsg');
 
       btn.disabled = true;
       txt.innerText = 'Mengirim OTP ke Telegram...';
       msg.innerHTML = '<span class="text-blue-400"><i class="fa-solid fa-circle-notch fa-spin mr-1"></i> Menghubungi bot Telegram...</span>';
 
       try {
-        const res = await fetch('/api/alker/request-otp', {
+        var res = await fetch('/api/alker/request-otp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ technicianName: currentTech.name, nik: currentTech.nik })
         });
-        const json = await res.json();
+        var json = await res.json();
 
         btn.disabled = false;
         txt.innerText = '📲 Minta Ulang Kode OTP';
 
         if (json.success) {
-          msg.innerHTML = \`<span class="text-emerald-400 font-semibold"><i class="fa-solid fa-check mr-1"></i> OTP terkirim ke Telegram \${json.maskedTelegram || ''}! Buka bot @jemba12bot</span>\`;
+          msg.innerHTML = '<span class="text-emerald-400 font-semibold"><i class="fa-solid fa-check mr-1"></i> OTP terkirim ke Telegram ' + (json.maskedTelegram || '') + '! Buka bot @jemba12bot</span>';
           document.getElementById('inputOtpOrPin').focus();
         } else {
-          msg.innerHTML = \`<span class="text-amber-400 font-medium">⚠️ \${json.message || 'Telegram ID belum terdaftar di NAKER.'}</span>\`;
+          msg.innerHTML = '<span class="text-amber-400 font-medium">⚠️ ' + (json.message || 'Telegram ID belum terdaftar di NAKER.') + '</span>';
         }
       } catch (err) {
         btn.disabled = false;
         txt.innerText = '📲 Minta Kode OTP ke Telegram Saya';
-        msg.innerHTML = \`<span class="text-rose-400">❌ Gagal mengirim: \${err.message}</span>\`;
+        msg.innerHTML = '<span class="text-rose-400">❌ Gagal mengirim: ' + err.message + '</span>';
       }
     }
 
     async function verifySecurityInput() {
       if (!currentTech) return;
-      const input = document.getElementById('inputOtpOrPin').value.trim();
-      const msg = document.getElementById('otpStatusMsg');
-      const secBadge = document.getElementById('secBadge');
-      const btn = document.getElementById('btnVerify');
+      var input = document.getElementById('inputOtpOrPin').value.trim();
+      var msg = document.getElementById('otpStatusMsg');
+      var secBadge = document.getElementById('secBadge');
+      var btn = document.getElementById('btnVerify');
 
       if (!input) {
         msg.innerHTML = '<span class="text-rose-400">Silakan masukkan 6 Digit Kode OTP Telegram Anda.</span>';
@@ -382,12 +418,12 @@ function renderAlkerFormHtml(initialTechs = []) {
       btn.innerText = '...';
 
       try {
-        const res = await fetch('/api/alker/verify-otp', {
+        var res = await fetch('/api/alker/verify-otp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ technicianName: currentTech.name, inputCode: input })
         });
-        const json = await res.json();
+        var json = await res.json();
 
         btn.disabled = false;
         btn.innerText = 'Verifikasi';
@@ -397,63 +433,51 @@ function renderAlkerFormHtml(initialTechs = []) {
           verifiedAuthToken = json.token || input;
           secBadge.className = 'text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-mono font-bold';
           secBadge.innerText = '✅ TERVERIFIKASI';
-          msg.innerHTML = \`<span class="text-emerald-400 font-bold"><i class="fa-solid fa-circle-check mr-1"></i> Identitas \${currentTech.name} Terverifikasi!</span>\`;
+          msg.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fa-solid fa-circle-check mr-1"></i> Identitas ' + currentTech.name + ' Terverifikasi!</span>';
           document.getElementById('inputOtpOrPin').disabled = true;
           document.getElementById('btnVerify').disabled = true;
           document.getElementById('btnRequestOtp').classList.add('hidden');
         } else {
           isSecurityVerified = false;
-          msg.innerHTML = \`<span class="text-rose-400 font-medium">🚫 \${json.message || 'Kode OTP salah / kedaluwarsa. Silakan minta kode baru.'}</span>\`;
+          msg.innerHTML = '<span class="text-rose-400 font-medium">🚫 ' + (json.message || 'Kode OTP salah / kedaluwarsa. Silakan minta kode baru.') + '</span>';
         }
       } catch (err) {
         btn.disabled = false;
         btn.innerText = 'Verifikasi';
-        msg.innerHTML = \`<span class="text-rose-400">❌ Error: \${err.message}</span>\`;
+        msg.innerHTML = '<span class="text-rose-400">❌ Error: ' + err.message + '</span>';
       }
     }
 
     function renderAlkerCards() {
-      const container = document.getElementById('itemsContainer');
-      container.innerHTML = currentAlkers.map((item, idx) => {
-        const name = item['Nama Alker'] || item['NAMA ALKER'] || \`Alker #\${idx+1}\`;
-        const sn = item['SN / ID Alker'] || item['ID Alker'] || '';
-        const currentSt = (item['Status'] || item['STATUS'] || 'Normal').trim().toLowerCase();
+      var container = document.getElementById('itemsContainer');
+      container.innerHTML = currentAlkers.map(function(item, idx) {
+        var name = item['Nama Alker'] || item['NAMA ALKER'] || ('Alker #' + (idx+1));
+        var sn = item['SN / ID Alker'] || item['ID Alker'] || '';
+        var currentSt = (item['Status'] || item['STATUS'] || 'Normal').trim().toLowerCase();
         
-        let stVal = 'Normal';
-        if (currentSt.includes('rusak')) stVal = 'Rusak';
-        else if (currentSt.includes('tidak') || currentSt.includes('hilang')) stVal = 'Tidak ada';
+        var stVal = 'Normal';
+        if (currentSt.indexOf('rusak') !== -1) stVal = 'Rusak';
+        else if (currentSt.indexOf('tidak') !== -1 || currentSt.indexOf('hilang') !== -1) stVal = 'Tidak ada';
 
-        return \`
-          <div class="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-3.5 space-y-3 transition hover:border-slate-700" id="cardItem_\${idx}">
-            <div class="flex items-start justify-between">
-              <div class="space-y-0.5">
-                <div class="text-xs font-bold text-white flex items-center">
-                  <span class="w-5 h-5 rounded-md bg-slate-800 text-slate-400 text-[10px] flex items-center justify-center font-mono mr-2">\${idx+1}</span>
-                  <span>\${name}</span>
-                </div>
-                \${sn ? \`<div class="text-[10px] text-slate-500 font-mono pl-7">SN/ID: \${sn}</div>\` : ''}
-              </div>
-            </div>
-
-            <!-- Segmented Control Status -->
-            <div class="grid grid-cols-3 gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800/80 text-xs font-semibold">
-              <button type="button" onclick="setItemStatus(\${idx}, 'Normal')" id="btnSt_\${idx}_Normal" class="st-btn py-1.5 rounded-lg text-center transition \${stVal === 'Normal' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-sm' : 'text-slate-400 hover:text-slate-200'}">
-                🟢 Normal
-              </button>
-              <button type="button" onclick="setItemStatus(\${idx}, 'Rusak')" id="btnSt_\${idx}_Rusak" class="st-btn py-1.5 rounded-lg text-center transition \${stVal === 'Rusak' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-sm' : 'text-slate-400 hover:text-slate-200'}">
-                🔴 Rusak
-              </button>
-              <button type="button" onclick="setItemStatus(\${idx}, 'Tidak ada')" id="btnSt_\${idx}_Tidak_ada" class="st-btn py-1.5 rounded-lg text-center transition \${stVal === 'Tidak ada' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-sm' : 'text-slate-400 hover:text-slate-200'}">
-                ❌ Hilang
-              </button>
-            </div>
-
-            <!-- Catatan Kerusakan / Keterangan (Conditional) -->
-            <div id="notesBox_\${idx}" class="\${stVal === 'Normal' ? 'hidden' : ''} pt-1 space-y-1">
-              <input type="text" id="noteInput_\${idx}" value="\${item['Keterangan'] || ''}" placeholder="Alasan kerusakan / kondisi fisik..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-rose-500">
-            </div>
-          </div>
-        \`;
+        return '<div class="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-3.5 space-y-3 transition hover:border-slate-700" id="cardItem_' + idx + '">' +
+          '<div class="flex items-start justify-between">' +
+            '<div class="space-y-0.5">' +
+              '<div class="text-xs font-bold text-white flex items-center">' +
+                '<span class="w-5 h-5 rounded-md bg-slate-800 text-slate-400 text-[10px] flex items-center justify-center font-mono mr-2">' + (idx+1) + '</span>' +
+                '<span>' + name + '</span>' +
+              '</div>' +
+              (sn ? '<div class="text-[10px] text-slate-500 font-mono pl-7">SN/ID: ' + sn + '</div>' : '') +
+            '</div>' +
+          '</div>' +
+          '<div class="grid grid-cols-3 gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800/80 text-xs font-semibold">' +
+            '<button type="button" onclick="setItemStatus(' + idx + ', \'Normal\')" id="btnSt_' + idx + '_Normal" class="st-btn py-1.5 rounded-lg text-center transition ' + (stVal === 'Normal' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-sm' : 'text-slate-400 hover:text-slate-200') + '">🟢 Normal</button>' +
+            '<button type="button" onclick="setItemStatus(' + idx + ', \'Rusak\')" id="btnSt_' + idx + '_Rusak" class="st-btn py-1.5 rounded-lg text-center transition ' + (stVal === 'Rusak' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-sm' : 'text-slate-400 hover:text-slate-200') + '">🔴 Rusak</button>' +
+            '<button type="button" onclick="setItemStatus(' + idx + ', \'Tidak ada\')" id="btnSt_' + idx + '_Tidak_ada" class="st-btn py-1.5 rounded-lg text-center transition ' + (stVal === 'Tidak ada' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-sm' : 'text-slate-400 hover:text-slate-200') + '">❌ Hilang</button>' +
+          '</div>' +
+          '<div id="notesBox_' + idx + '" class="' + (stVal === 'Normal' ? 'hidden' : '') + ' pt-1 space-y-1">' +
+            '<input type="text" id="noteInput_' + idx + '" value="' + (item['Keterangan'] || '') + '" placeholder="Alasan kerusakan / kondisi fisik..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-rose-500">' +
+          '</div>' +
+        '</div>';
       }).join('');
     }
 
@@ -461,13 +485,12 @@ function renderAlkerFormHtml(initialTechs = []) {
       if (!currentAlkers[idx]) return;
       currentAlkers[idx].selectedStatus = status;
 
-      const card = document.getElementById('cardItem_' + idx);
-      const btnNormal = document.getElementById(\`btnSt_\${idx}_Normal\`);
-      const btnRusak = document.getElementById(\`btnSt_\${idx}_Rusak\`);
-      const btnHilang = document.getElementById(\`btnSt_\${idx}_Tidak_ada\`);
-      const notesBox = document.getElementById(\`notesBox_\${idx}\`);
+      var btnNormal = document.getElementById('btnSt_' + idx + '_Normal');
+      var btnRusak = document.getElementById('btnSt_' + idx + '_Rusak');
+      var btnHilang = document.getElementById('btnSt_' + idx + '_Tidak_ada');
+      var notesBox = document.getElementById('notesBox_' + idx);
 
-      [btnNormal, btnRusak, btnHilang].forEach(b => {
+      [btnNormal, btnRusak, btnHilang].forEach(function(b) {
         if (b) b.className = 'st-btn py-1.5 rounded-lg text-center transition text-slate-400 hover:text-slate-200';
       });
 
@@ -486,29 +509,28 @@ function renderAlkerFormHtml(initialTechs = []) {
     }
 
     function setAllToolsNormal() {
-      currentAlkers.forEach((item, idx) => {
+      currentAlkers.forEach(function(item, idx) {
         setItemStatus(idx, 'Normal');
       });
-      const btn = document.querySelector('#sectionQuickAction button');
-      const orig = btn.innerHTML;
+      var btn = document.querySelector('#sectionQuickAction button');
+      var orig = btn.innerHTML;
       btn.innerHTML = '<i class="fa-solid fa-check text-white"></i> <span>SEMUA DISIMPULKAN NORMAL!</span>';
-      setTimeout(() => { btn.innerHTML = orig; }, 1500);
+      setTimeout(function() { btn.innerHTML = orig; }, 1500);
     }
 
     function updateCounter() {
-      const total = currentAlkers.length;
-      let normal = 0;
-      let rusak = 0;
-      let missing = 0;
+      var normal = 0;
+      var rusak = 0;
+      var missing = 0;
 
-      currentAlkers.forEach((item, idx) => {
-        const st = item.selectedStatus || (item['Status'] || 'Normal').trim();
+      currentAlkers.forEach(function(item) {
+        var st = item.selectedStatus || (item['Status'] || 'Normal').trim();
         if (st === 'Rusak') rusak++;
-        else if (st.includes('Tidak') || st === 'Hilang') missing++;
+        else if (st.indexOf('Tidak') !== -1 || st === 'Hilang') missing++;
         else normal++;
       });
 
-      document.getElementById('checklistCounter').innerText = \`🟢 \${normal} | 🔴 \${rusak} | ❌ \${missing}\`;
+      document.getElementById('checklistCounter').innerText = '🟢 ' + normal + ' | 🔴 ' + rusak + ' | ❌ ' + missing;
     }
 
     async function submitChecklist() {
@@ -523,18 +545,18 @@ function renderAlkerFormHtml(initialTechs = []) {
         return;
       }
 
-      const submitBtn = document.getElementById('btnSubmit');
+      var submitBtn = document.getElementById('btnSubmit');
       submitBtn.disabled = true;
       submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-slate-950"></i> <span>Menyimpan ke Sheet & Broadcast...</span>';
 
-      const payload = {
+      var payload = {
         technicianName: currentTech.name,
         technicianNik: currentTech.nik,
         sektor: currentSector,
         leader: currentTech.leader,
         authToken: verifiedAuthToken,
-        items: currentAlkers.map((item, idx) => {
-          const noteInput = document.getElementById('noteInput_' + idx);
+        items: currentAlkers.map(function(item, idx) {
+          var noteInput = document.getElementById('noteInput_' + idx);
           return {
             name: item['Nama Alker'] || item['NAMA ALKER'],
             idAlker: item['SN / ID Alker'] || item['ID Alker'] || '',
@@ -545,12 +567,12 @@ function renderAlkerFormHtml(initialTechs = []) {
       };
 
       try {
-        const res = await fetch('/api/alker/submit-form', {
+        var res = await fetch('/api/alker/submit-form', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        const json = await res.json();
+        var json = await res.json();
 
         submitBtn.disabled = false;
         submitBtn.innerHTML = '<i class="fa-solid fa-paper-plane text-slate-950"></i> <span>SIMPAN & BROADCAST LAPORAN</span>';
@@ -582,5 +604,6 @@ function renderAlkerFormHtml(initialTechs = []) {
 }
 
 module.exports = {
-  renderAlkerFormHtml
+  renderAlkerFormHtml,
+  getSectorGroup
 };
