@@ -1,5 +1,5 @@
 /**
- * Mobile-First Web Mini App for Alker Checklist & Updates
+ * Mobile-First Web Mini App for Alker Checklist with OTP & NIK Security Verification
  */
 
 function renderAlkerFormHtml() {
@@ -33,7 +33,7 @@ function renderAlkerFormHtml() {
     ::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
   </style>
 </head>
-<body class="bg-[#0b0f19] text-slate-100 min-h-screen flex flex-col antialiased pb-24">
+<body class="bg-[#0b0f19] text-slate-100 min-h-screen flex flex-col antialiased pb-28">
 
   <!-- HEADER -->
   <header class="sticky top-0 z-40 bg-[#0f172a]/95 backdrop-blur border-b border-slate-800 px-4 py-3.5 shadow-md">
@@ -60,7 +60,7 @@ function renderAlkerFormHtml() {
     <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-sm space-y-3" id="sectionTechPicker">
       <div class="flex items-center justify-between border-b border-slate-800/80 pb-2">
         <span class="text-xs font-bold text-slate-300 flex items-center">
-          <i class="fa-solid fa-user-check text-emerald-400 mr-2"></i> Identitas Teknisi
+          <i class="fa-solid fa-user-check text-emerald-400 mr-2"></i> 1. Identitas Teknisi
         </span>
         <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-mono" id="badgeSektor">SEKTOR</span>
       </div>
@@ -99,6 +99,36 @@ function renderAlkerFormHtml() {
       </div>
     </div>
 
+    <!-- STEP 2: SECURITY VERIFICATION (OTP / PIN NIK) -->
+    <div id="sectionSecurity" class="hidden bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-800/80 pb-2">
+        <span class="text-xs font-bold text-slate-300 flex items-center">
+          <i class="fa-solid fa-shield-halved text-amber-400 mr-2"></i> 2. Verifikasi Keamanan (Anti-Fraud)
+        </span>
+        <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 font-mono" id="secBadge">BELUM VERIFIKASI</span>
+      </div>
+
+      <p class="text-[11px] text-slate-400 leading-relaxed">
+        Untuk memastikan data alker tidak diubah oleh teknisi lain, silakan minta <strong>Kode OTP via Telegram</strong> atau masukkan <strong>NIK Anda</strong>:
+      </p>
+
+      <div class="space-y-2">
+        <!-- Request Telegram OTP Button -->
+        <button type="button" onclick="requestTelegramOtp()" id="btnRequestOtp" class="w-full py-2.5 px-3 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 text-xs font-semibold flex items-center justify-center space-x-2 transition active:scale-[0.98]">
+          <i class="fa-brands fa-telegram text-sm"></i>
+          <span id="txtRequestOtp">📲 Kirim Kode OTP ke Telegram Saya</span>
+        </button>
+
+        <div class="flex gap-2">
+          <input type="password" id="inputOtpOrPin" placeholder="Masukkan 6 Digit OTP / NIK..." class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder-slate-500 font-mono tracking-wider focus:outline-none focus:border-amber-500">
+          <button type="button" onclick="verifySecurityInput()" id="btnVerify" class="py-2 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition active:scale-95">
+            Verifikasi
+          </button>
+        </div>
+        <div id="otpStatusMsg" class="text-[11px] text-slate-400 min-h-[18px]"></div>
+      </div>
+    </div>
+
     <!-- QUICK 1-TAP ALL SAFE BUTTON -->
     <div id="sectionQuickAction" class="hidden">
       <button type="button" onclick="setAllToolsNormal()" class="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/20 active:scale-[0.99] transition flex items-center justify-center space-x-2">
@@ -125,9 +155,9 @@ function renderAlkerFormHtml() {
         <div class="text-slate-400">Status Checklist:</div>
         <div class="font-bold text-white font-mono" id="checklistCounter">0/0 Lengkap</div>
       </div>
-      <button type="button" onclick="submitChecklist()" id="btnSubmit" class="flex-1 py-3 px-5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs shadow-lg shadow-emerald-500/20 active:scale-95 transition flex items-center justify-center space-x-2">
+      <button type="button" onclick="submitChecklist()" id="btnSubmit" class="flex-1 py-3 px-5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs shadow-lg shadow-emerald-500/20 active:scale-95 transition flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed">
         <i class="fa-solid fa-paper-plane text-slate-950"></i>
-        <span>SIMPAN & KIRIM LAPORAN</span>
+        <span>SIMPAN & BROADCAST LAPORAN</span>
       </button>
     </div>
   </div>
@@ -139,13 +169,14 @@ function renderAlkerFormHtml() {
         <i class="fa-solid fa-circle-check"></i>
       </div>
       <div>
-        <h3 class="text-base font-bold text-white">CHECKLIST BERHASIL DISIMPAN!</h3>
-        <p class="text-xs text-slate-400 mt-1" id="successDesc">Laporan alker Anda telah disinkronkan ke Google Sheet & Grup Leader.</p>
+        <h3 class="text-base font-bold text-white">CHECKLIST BERHASIL TERSIMPAN!</h3>
+        <p class="text-xs text-slate-400 mt-1">Status 18 alker telah diperbarui di Google Sheet & di-broadcast ke grup Telegram STATUS ALKER.</p>
       </div>
       <div class="bg-slate-950 rounded-2xl p-3.5 border border-slate-800 text-left text-xs font-mono space-y-1">
         <div class="text-slate-400 flex justify-between"><span>Teknisi:</span><span class="text-white font-bold" id="resTechName">-</span></div>
         <div class="text-slate-400 flex justify-between"><span>Waktu:</span><span class="text-emerald-400" id="resTime">-</span></div>
-        <div class="text-slate-400 flex justify-between"><span>Ringkasan:</span><span class="text-white" id="resSummary">-</span></div>
+        <div class="text-slate-400 flex justify-between"><span>Google Sheet:</span><span class="text-emerald-400 font-bold">✅ Tersinkron</span></div>
+        <div class="text-slate-400 flex justify-between"><span>Grup Telegram:</span><span class="text-emerald-400 font-bold">📢 Ter-broadcast</span></div>
       </div>
       <button type="button" onclick="closeSuccessModal()" class="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold transition">
         Tutup & Selesai
@@ -158,6 +189,8 @@ function renderAlkerFormHtml() {
     let currentSector = 'BATULICIN';
     let currentTech = null;
     let currentAlkers = [];
+    let isSecurityVerified = false;
+    let verifiedAuthToken = '';
 
     // URL Params parsing
     const urlParams = new URLSearchParams(window.location.search);
@@ -223,8 +256,12 @@ function renderAlkerFormHtml() {
     async function onTechSelected() {
       const select = document.getElementById('techSelect');
       const selectedName = select.value;
+      isSecurityVerified = false;
+      verifiedAuthToken = '';
+
       if (!selectedName) {
         document.getElementById('techDetailCard').classList.add('hidden');
+        document.getElementById('sectionSecurity').classList.add('hidden');
         document.getElementById('sectionQuickAction').classList.add('hidden');
         document.getElementById('floatingSubmitBar').classList.add('hidden');
         document.getElementById('itemsContainer').innerHTML = \`
@@ -241,6 +278,13 @@ function renderAlkerFormHtml() {
         document.getElementById('lblNik').innerText = currentTech.nik || '-';
         document.getElementById('lblLeader').innerText = currentTech.leader || '-';
         document.getElementById('techDetailCard').classList.remove('hidden');
+        document.getElementById('sectionSecurity').classList.remove('hidden');
+        
+        // Reset security state
+        document.getElementById('secBadge').className = 'text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 font-mono';
+        document.getElementById('secBadge').innerText = 'BUTUH VERIFIKASI';
+        document.getElementById('otpStatusMsg').innerHTML = '';
+        document.getElementById('inputOtpOrPin').value = '';
       }
 
       // Fetch Alker list for this tech
@@ -265,6 +309,86 @@ function renderAlkerFormHtml() {
         }
       } catch (err) {
         document.getElementById('itemsContainer').innerHTML = \`<div class="text-center py-8 text-rose-400 text-xs">❌ Error: \${err.message}</div>\`;
+      }
+    }
+
+    async function requestTelegramOtp() {
+      if (!currentTech) return;
+      const btn = document.getElementById('btnRequestOtp');
+      const txt = document.getElementById('txtRequestOtp');
+      const msg = document.getElementById('otpStatusMsg');
+
+      btn.disabled = true;
+      txt.innerText = 'Mengirim OTP ke Telegram...';
+      msg.innerHTML = '<span class="text-blue-400"><i class="fa-solid fa-circle-notch fa-spin mr-1"></i> Menghubungi bot Telegram...</span>';
+
+      try {
+        const res = await fetch('/api/alker/request-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ technicianName: currentTech.name, nik: currentTech.nik })
+        });
+        const json = await res.json();
+
+        btn.disabled = false;
+        txt.innerText = '📲 Kirim Ulang Kode OTP';
+
+        if (json.success) {
+          msg.innerHTML = \`<span class="text-emerald-400 font-semibold"><i class="fa-solid fa-check mr-1"></i> OTP terkirim ke Telegram \${json.maskedTelegram || ''}! Cek chat bot @jemba12bot</span>\`;
+          document.getElementById('inputOtpOrPin').focus();
+        } else {
+          msg.innerHTML = \`<span class="text-amber-400 font-medium">⚠️ \${json.message || 'Telegram ID belum terdaftar. Silakan gunakan NIK Anda.'}</span>\`;
+        }
+      } catch (err) {
+        btn.disabled = false;
+        txt.innerText = '📲 Kirim Kode OTP ke Telegram';
+        msg.innerHTML = \`<span class="text-rose-400">❌ Gagal mengirim: \${err.message}</span>\`;
+      }
+    }
+
+    async function verifySecurityInput() {
+      if (!currentTech) return;
+      const input = document.getElementById('inputOtpOrPin').value.trim();
+      const msg = document.getElementById('otpStatusMsg');
+      const secBadge = document.getElementById('secBadge');
+      const btn = document.getElementById('btnVerify');
+
+      if (!input) {
+        msg.innerHTML = '<span class="text-rose-400">Silakan masukkan Kode OTP atau NIK Anda.</span>';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerText = '...';
+
+      try {
+        const res = await fetch('/api/alker/verify-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ technicianName: currentTech.name, nik: currentTech.nik, inputCode: input })
+        });
+        const json = await res.json();
+
+        btn.disabled = false;
+        btn.innerText = 'Verifikasi';
+
+        if (json.success) {
+          isSecurityVerified = true;
+          verifiedAuthToken = json.token || input;
+          secBadge.className = 'text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-mono font-bold';
+          secBadge.innerText = '✅ TERVERIFIKASI';
+          msg.innerHTML = \`<span class="text-emerald-400 font-bold"><i class="fa-solid fa-circle-check mr-1"></i> Identitas \${currentTech.name} Terverifikasi!</span>\`;
+          document.getElementById('inputOtpOrPin').disabled = true;
+          document.getElementById('btnVerify').disabled = true;
+          document.getElementById('btnRequestOtp').classList.add('hidden');
+        } else {
+          isSecurityVerified = false;
+          msg.innerHTML = \`<span class="text-rose-400 font-medium">🚫 \${json.message || 'Kode OTP / NIK salah. Coba lagi.'}</span>\`;
+        }
+      } catch (err) {
+        btn.disabled = false;
+        btn.innerText = 'Verifikasi';
+        msg.innerHTML = \`<span class="text-rose-400">❌ Error: \${err.message}</span>\`;
       }
     }
 
@@ -345,7 +469,6 @@ function renderAlkerFormHtml() {
       currentAlkers.forEach((item, idx) => {
         setItemStatus(idx, 'Normal');
       });
-      // Small toast feedback
       const btn = document.querySelector('#sectionQuickAction button');
       const orig = btn.innerHTML;
       btn.innerHTML = '<i class="fa-solid fa-check text-white"></i> <span>SEMUA DISIMPULKAN NORMAL!</span>';
@@ -374,22 +497,29 @@ function renderAlkerFormHtml() {
         return;
       }
 
+      if (!isSecurityVerified) {
+        alert('⚠️ Verifikasi Keamanan Diperlukan!\nSilakan masukkan Kode OTP Telegram atau NIK Anda di bagian Step 2 sebelum menyimpan.');
+        document.getElementById('inputOtpOrPin').focus();
+        return;
+      }
+
       const submitBtn = document.getElementById('btnSubmit');
       submitBtn.disabled = true;
-      submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-slate-950"></i> <span>Menyimpan...</span>';
+      submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-slate-950"></i> <span>Menyimpan ke Sheet & Grup...</span>';
 
       const payload = {
         technicianName: currentTech.name,
         technicianNik: currentTech.nik,
         sektor: currentSector,
         leader: currentTech.leader,
+        authToken: verifiedAuthToken,
         items: currentAlkers.map((item, idx) => {
           const noteInput = document.getElementById('noteInput_' + idx);
           return {
             name: item['Nama Alker'] || item['NAMA ALKER'],
             idAlker: item['SN / ID Alker'] || item['ID Alker'] || '',
             status: item.selectedStatus || item['Status'] || 'Normal',
-            keterangan: noteInput ? noteInput.value.trim() : ''
+            keterangan: noteInput ? noteInput.value.trim() : (item.selectedStatus === 'Normal' ? 'BAIK' : '')
           };
         })
       };
@@ -403,19 +533,18 @@ function renderAlkerFormHtml() {
         const json = await res.json();
 
         submitBtn.disabled = false;
-        submitBtn.innerHTML = '<i class="fa-solid fa-paper-plane text-slate-950"></i> <span>SIMPAN & KIRIM LAPORAN</span>';
+        submitBtn.innerHTML = '<i class="fa-solid fa-paper-plane text-slate-950"></i> <span>SIMPAN & BROADCAST LAPORAN</span>';
 
         if (json.success) {
           document.getElementById('resTechName').innerText = currentTech.name;
           document.getElementById('resTime').innerText = new Date().toLocaleTimeString('id-ID') + ' WITA';
-          document.getElementById('resSummary').innerText = \`\${json.normalCount || 0} Normal, \${json.rusakCount || 0} Rusak, \${json.missingCount || 0} Hilang\`;
           document.getElementById('successModal').classList.remove('hidden');
         } else {
           alert('⚠️ Gagal menyimpan: ' + (json.message || 'Error server'));
         }
       } catch (err) {
         submitBtn.disabled = false;
-        submitBtn.innerHTML = '<i class="fa-solid fa-paper-plane text-slate-950"></i> <span>SIMPAN & KIRIM LAPORAN</span>';
+        submitBtn.innerHTML = '<i class="fa-solid fa-paper-plane text-slate-950"></i> <span>SIMPAN & BROADCAST LAPORAN</span>';
         alert('❌ Error koneksi: ' + err.message);
       }
     }

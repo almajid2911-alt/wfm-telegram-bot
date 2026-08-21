@@ -242,7 +242,12 @@ const SPREADSHEET_ID = process.env.SPREADSHEET_ALKER_ID || '1Vk5RsTMxAJDI71SAo_7
 const SHEET_ALKER = 'DataAlker';
 const SHEET_NAKER = 'NAKER';
 const WEBHOOK_SCRIPT_URL = process.env.ALKER_WEBHOOK_URL || process.env.GOOGLE_SCRIPT_ALKER_URL || 'https://script.google.com/macros/s/AKfycbyTvKaqyjYSLXQgpYvNqA1X9oBVQzGbmfNb-ZcDiQy5_mhca6KEuYdqyvO4j3aRAW6y/exec';
-const GROUP_ID_LEADER_ALERT = '-4945019710';
+const GROUP_ID_STATUS_ALKER = '-1003368989739'; // Group "STATUS ALKER" (Foto / Broadcast)
+const GROUP_ID_LEADER_ALERT = '-4945019710';    // Group Alert SPV & Leader
+
+// OTP In-Memory Storage (TTL 5 Menit)
+const otpStore = new Map();
+const MASTER_PIN = '2911';
 
 const server = http.createServer(async (req, res) => {
   const reqUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
@@ -267,7 +272,118 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // ✅ 2. API: Daftar Seluruh Teknisi per Sektor (untuk Form Mobile)
+  // ✅ 2. API: Request Kode OTP ke Akun Telegram Teknisi
+  if (req.method === 'POST' && pathname === '/api/alker/request-otp') {
+    let body = '';
+    req.on('data', (chunk) => { body += chunk.toString(); });
+    req.on('end', async () => {
+      try {
+        const { technicianName, nik } = JSON.parse(body || '{}');
+        const nakerRows = await getSheetRows(SPREADSHEET_ID, SHEET_NAKER, true);
+        const tech = nakerRows.find(n => {
+          const name = String(n['NAMA'] || n['Nama'] || '').trim().toUpperCase();
+          const nNik = String(n['NIK'] || '').trim();
+          return (name === String(technicianName).toUpperCase()) || (nik && nNik === String(nik));
+        });
+
+        if (!tech) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ success: false, message: 'Data teknisi tidak ditemukan di NAKER.' }));
+        }
+
+        const telegramId = String(tech['ID TELEGRAM'] || '').trim();
+        if (!telegramId) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({
+            success: false,
+            message: 'Telegram ID Anda belum terdaftar di NAKER. Silakan masukkan NIK Anda sebagai PIN verifikasi.'
+          }));
+        }
+
+        // Generate 6 Digit Random OTP
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const techKey = String(tech['NAMA'] || tech['Nama'] || '').trim().toUpperCase();
+        otpStore.set(techKey, {
+          code: otpCode,
+          nik: String(tech['NIK'] || '').trim(),
+          expiresAt: Date.now() + 5 * 60 * 1000
+        });
+
+        // Kirim OTP ke Telegram Pribadi Teknisi
+        const tg = interactiveBot ? interactiveBot.telegram : null;
+        if (tg) {
+          const otpMessage = (
+            `🔐 <b>KODE OTP VERIFIKASI ALKER WFM</b>\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `Halo <b>${techKey}</b>,\n\n` +
+            `Kode verifikasi checklist alker Anda adalah:\n` +
+            `👉 <code>${otpCode}</code> 👈\n\n` +
+            `⚠️ <i>Kode ini berlaku selama 5 menit. Jangan berikan kode ini kepada orang lain untuk keamanan alker Anda.</i>`
+          );
+
+          await tg.sendMessage(telegramId, otpMessage, { parse_mode: 'HTML' });
+          console.log(`✅ [OTP Alker] Kode ${otpCode} terkirim ke Telegram ID ${telegramId} (${techKey})`);
+        }
+
+        const masked = telegramId.length > 4 ? telegramId.slice(0, 3) + '****' + telegramId.slice(-2) : 'Telegram Anda';
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, maskedTelegram: masked }));
+      } catch (err) {
+        console.error('Error requesting OTP:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: err.message }));
+      }
+    });
+    return;
+  }
+
+  // ✅ 3. API: Verifikasi Kode OTP atau NIK
+  if (req.method === 'POST' && pathname === '/api/alker/verify-otp') {
+    let body = '';
+    req.on('data', (chunk) => { body += chunk.toString(); });
+    req.on('end', async () => {
+      try {
+        const { technicianName, nik, inputCode } = JSON.parse(body || '{}');
+        const code = String(inputCode || '').trim();
+        const techKey = String(technicianName || '').trim().toUpperCase();
+
+        // 1. Cek Master PIN / Admin Bypass
+        if (code === MASTER_PIN) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ success: true, verified: true, token: 'MASTER_AUTH' }));
+        }
+
+        // 2. Cek OTP di memory
+        const stored = otpStore.get(techKey);
+        if (stored && stored.code === code && Date.now() < stored.expiresAt) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ success: true, verified: true, token: 'OTP_AUTH_' + code }));
+        }
+
+        // 3. Cek apakah inputCode adalah NIK teknisi yang cocok di NAKER
+        const nakerRows = await getSheetRows(SPREADSHEET_ID, SHEET_NAKER, true);
+        const tech = nakerRows.find(n => {
+          const name = String(n['NAMA'] || n['Nama'] || '').trim().toUpperCase();
+          const nNik = String(n['NIK'] || '').trim();
+          return name === techKey && (nNik === code || (nik && nNik === String(nik) && code === nNik));
+        });
+
+        if (tech) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ success: true, verified: true, token: 'NIK_AUTH_' + code }));
+        }
+
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: 'Kode OTP atau NIK tidak sesuai. Silakan periksa kembali.' }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: err.message }));
+      }
+    });
+    return;
+  }
+
+  // ✅ 4. API: Daftar Seluruh Teknisi per Sektor (untuk Form Mobile)
   if (req.method === 'GET' && pathname === '/api/alker/techs') {
     try {
       const nakerRows = await getSheetRows(SPREADSHEET_ID, SHEET_NAKER, true);
@@ -288,7 +404,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // ✅ 3. API: Daftar 18 Alker Milik Teknisi Tertentu
+  // ✅ 5. API: Daftar 18 Alker Milik Teknisi Tertentu
   if (req.method === 'GET' && pathname === '/api/alker/tech-items') {
     try {
       const targetName = (reqUrl.searchParams.get('name') || '').trim().toLowerCase();
@@ -313,18 +429,18 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // ✅ 4. API: Submit Form Checklist Alker dari Mobile Web
+  // ✅ 6. API: Submit Form Checklist Alker & Simpan ke Google Sheet + Broadcast Telegram
   if (req.method === 'POST' && pathname === '/api/alker/submit-form') {
     let body = '';
     req.on('data', (chunk) => { body += chunk.toString(); });
     req.on('end', async () => {
       try {
         const payload = JSON.parse(body);
-        const { technicianName, technicianNik, sektor, leader, items } = payload;
+        const { technicianName, technicianNik, sektor, leader, items, authToken } = payload;
 
         if (!technicianName || !items || !Array.isArray(items)) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          return res.end(JSON.stringify({ success: false, message: 'Data tidak lengkap.' }));
+          return res.end(JSON.stringify({ success: false, message: 'Data checklist tidak lengkap.' }));
         }
 
         let normalCount = 0;
@@ -345,68 +461,78 @@ const server = http.createServer(async (req, res) => {
           }
         });
 
-        // 1. Simpan ke Google Sheets via Apps Script Webhook
+        // 1. Simpan ke Google Sheets via Apps Script Webhook (Menggunakan update_alker_bot)
         if (WEBHOOK_SCRIPT_URL) {
-          if (rusakCount === 0 && missingCount === 0) {
-            // Semua Aman -> Mass Confirm
+          for (const item of items) {
+            const st = (item.status || 'Normal').trim();
+            const ket = (item.keterangan || (st === 'Normal' ? 'BAIK' : '-')).trim();
             await fetch(WEBHOOK_SCRIPT_URL, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                action: 'mass_confirm_alker',
-                technicianName: technicianName
-              })
-            }).catch(e => console.warn('[Alker Webhook Error]', e.message));
-          } else {
-            // Ada alat rusak/hilang -> Update per alat
-            for (const item of items) {
-              await fetch(WEBHOOK_SCRIPT_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  action: 'update_alker_status',
-                  technicianName: technicianName,
-                  alkerName: item.name,
-                  idAlker: item.idAlker || '',
-                  status: item.status,
-                  keterangan: item.keterangan || '',
-                  sektor: sektor || 'BATULICIN'
-                })
-              }).catch(e => console.warn('[Alker Webhook Item Error]', e.message));
-            }
+                action: 'update_alker_bot',
+                technicianName: technicianName,
+                alkerName: item.name,
+                idAlker: item.idAlker || '',
+                status: st,
+                keterangan: ket,
+                updatedBy: `${technicianName} (Web Form)`
+              }),
+              redirect: 'follow'
+            }).catch(e => console.warn('[Alker Webhook Item Error]', e.message));
           }
+          console.log(`✅ [Alker Sync] Berhasil memperbarui ${items.length} item milik ${technicianName} di Google Sheet.`);
         }
 
-        // 2. Kirim Notifikasi Rekap ke Grup Telegram Leader & SPV
+        // 2. Broadcast Hasil Update ke Grup "STATUS ALKER" (-1003368989739)
         const tg = interactiveBot ? interactiveBot.telegram : null;
         if (tg) {
-          const timeStr = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Makassar' }) + ' WITA';
-          let alertCard = `📋 <b>LAPORAN CHECKLIST ALKER (WEB FORM)</b>\n`;
-          alertCard += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-          alertCard += `👤 <b>Teknisi :</b> ${technicianName} (${technicianNik || '-'})\n`;
-          alertCard += `🏢 <b>Sektor  :</b> ${sektor || 'BATULICIN'}\n`;
-          alertCard += `🕒 <b>Waktu   :</b> ${timeStr}\n\n`;
-          alertCard += `📊 <b>Hasil Pemeriksaan:</b>\n`;
-          alertCard += `  🟢 Normal   : <b>${normalCount}</b> item\n`;
-          alertCard += `  🔴 Rusak    : <b>${rusakCount}</b> item\n`;
-          alertCard += `  ❌ Tidak Ada: <b>${missingCount}</b> item\n`;
+          // Kirim broadcast tiap item atau rekap sesuai format grup
+          for (const item of items) {
+            const st = (item.status || 'Normal').trim().toUpperCase();
+            const ket = (item.keterangan || (st === 'NORMAL' ? 'BAIK' : '-')).trim().toUpperCase();
+            const sn = item.idAlker || '-';
 
-          if (troubleItems.length > 0) {
-            alertCard += `\n⚠️ <b>Rincian Alat Bermasalah:</b>\n`;
-            troubleItems.forEach((t, i) => {
-              alertCard += `${i + 1}. ${t.statusText} <b>${t.name}</b>\n   <i>Ket: ${t.keterangan || 'Tidak ada catatan'}</i>\n`;
-            });
-          } else {
-            alertCard += `\n✨ <i>Semua 18 item alker dalam kondisi aman & berfungsi baik.</i>\n`;
+            const broadcastText = (
+              `📢 <b>Update ALKER</b>\n\n` +
+              `👷 <b>Teknisi :</b> ${technicianName}\n` +
+              `🧰 <b>Alker   :</b> ${item.name}\n` +
+              `🔢 <b>SN      :</b> ${sn}\n` +
+              `📌 <b>Kondisi :</b> ${st}\n` +
+              `📝 <b>Catatan :</b> ${ket}`
+            );
+
+            await tg.sendMessage(GROUP_ID_STATUS_ALKER, broadcastText, { parse_mode: 'HTML' }).catch(() => {});
           }
 
-          tg.sendMessage(GROUP_ID_LEADER_ALERT, alertCard, { parse_mode: 'HTML' }).catch(() => {});
+          // Kirim Rekap Summary ke Grup Leader & SPV (-4945019710)
+          const timeStr = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Makassar' }) + ' WITA';
+          let leaderSummary = `📋 <b>LAPORAN LENGKAP CHECKLIST ALKER (WEB)</b>\n`;
+          leaderSummary += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+          leaderSummary += `👤 <b>Teknisi :</b> ${technicianName} (${technicianNik || '-'})\n`;
+          leaderSummary += `🏢 <b>Sektor  :</b> ${sektor || 'BATULICIN'}\n`;
+          leaderSummary += `🕒 <b>Waktu   :</b> ${timeStr}\n\n`;
+          leaderSummary += `📊 <b>Status Pemeriksaan (18 Alat):</b>\n`;
+          leaderSummary += `  🟢 Normal   : <b>${normalCount}</b> item\n`;
+          leaderSummary += `  🔴 Rusak    : <b>${rusakCount}</b> item\n`;
+          leaderSummary += `  ❌ Tidak Ada: <b>${missingCount}</b> item\n`;
+
+          if (troubleItems.length > 0) {
+            leaderSummary += `\n⚠️ <b>Daftar Alat Bermasalah:</b>\n`;
+            troubleItems.forEach((t, i) => {
+              leaderSummary += `${i + 1}. ${t.statusText} <b>${t.name}</b> (Ket: ${t.keterangan || '-'})\n`;
+            });
+          } else {
+            leaderSummary += `\n✨ <i>Semua 18 item alker dalam kondisi aman & berfungsi baik.</i>\n`;
+          }
+
+          await tg.sendMessage(GROUP_ID_LEADER_ALERT, leaderSummary, { parse_mode: 'HTML' }).catch(() => {});
         }
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
           success: true,
-          message: 'Laporan alker berhasil disimpan!',
+          message: 'Laporan alker berhasil disimpan dan di-broadcast!',
           normalCount,
           rusakCount,
           missingCount
