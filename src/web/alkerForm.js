@@ -1,8 +1,13 @@
 /**
- * Mobile-First Web Mini App for Alker Checklist with OTP & NIK Security Verification
+ * Mobile-First Web Mini App for Alker Checklist with Server-Side Rendered Tech List & OTP Verification
  */
 
-function renderAlkerFormHtml() {
+function renderAlkerFormHtml(initialTechs = []) {
+  const safeJsonTechs = JSON.stringify(initialTechs || []);
+  const initialOptions = (initialTechs && initialTechs.length > 0)
+    ? initialTechs.map(t => `<option value="${t.name}">[${t.sektor || 'BLC'}] ${t.name} (NIK: ${t.nik})</option>`).join('')
+    : '';
+
   return `<!DOCTYPE html>
 <html lang="id" class="dark">
 <head>
@@ -62,7 +67,7 @@ function renderAlkerFormHtml() {
         <span class="text-xs font-bold text-slate-300 flex items-center">
           <i class="fa-solid fa-user-check text-emerald-400 mr-2"></i> 1. Identitas Teknisi
         </span>
-        <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-mono" id="badgeSektor">SEKTOR</span>
+        <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-mono" id="badgeSektor">SEMUA SEKTOR</span>
       </div>
 
       <!-- Sektor Buttons -->
@@ -81,11 +86,12 @@ function renderAlkerFormHtml() {
         </button>
       </div>
 
-      <!-- Dropdown Nama Teknisi -->
+      <!-- Dropdown Nama Teknisi (Pre-Rendered) -->
       <div class="space-y-1">
         <label class="text-[11px] text-slate-400 font-medium">Pilih Nama Teknisi:</label>
         <select id="techSelect" onchange="onTechSelected()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 font-medium">
-          <option value="">-- Memuat daftar teknisi... --</option>
+          <option value="">-- Pilih Nama Teknisi (${initialTechs.length} Orang) --</option>
+          ${initialOptions}
         </select>
       </div>
 
@@ -188,7 +194,7 @@ function renderAlkerFormHtml() {
   </div>
 
   <script>
-    let allTechs = [];
+    let allTechs = ${safeJsonTechs};
     let currentSector = 'ALL';
     let currentTech = null;
     let currentAlkers = [];
@@ -215,38 +221,25 @@ function renderAlkerFormHtml() {
       return 'BATULICIN';
     }
 
-    async function loadInitialData() {
-      try {
-        const res = await fetch('/api/alker/techs');
-        const json = await res.json();
-        if (json.success && json.data && json.data.length > 0) {
-          allTechs = json.data;
-          
-          if (paramSektor && ['BATULICIN', 'SATUI', 'KOTABARU'].includes(paramSektor)) {
-            selectSector(paramSektor);
-          } else {
-            selectSector('ALL');
-          }
+    function initForm() {
+      if (paramSektor && ['BATULICIN', 'SATUI', 'KOTABARU'].includes(paramSektor)) {
+        selectSector(paramSektor);
+      } else {
+        selectSector('ALL');
+      }
 
-          // Auto select if query params provided
-          if (paramNik || paramTech) {
-            const found = allTechs.find(t => 
-              (paramNik && t.nik === paramNik) ||
-              (paramTech && t.name.toLowerCase().includes(paramTech.toLowerCase()))
-            );
-            if (found) {
-              const sec = getSectorGroup(found.sektor);
-              selectSector(sec);
-              document.getElementById('techSelect').value = found.name;
-              onTechSelected();
-            }
-          }
-        } else {
-          document.getElementById('techSelect').innerHTML = '<option value="">-- Gagal memuat data dari server --</option>';
+      // Auto select if query params provided
+      if (paramNik || paramTech) {
+        const found = allTechs.find(t => 
+          (paramNik && t.nik === paramNik) ||
+          (paramTech && t.name.toLowerCase().includes(paramTech.toLowerCase()))
+        );
+        if (found) {
+          const sec = getSectorGroup(found.sektor);
+          selectSector(sec);
+          document.getElementById('techSelect').value = found.name;
+          onTechSelected();
         }
-      } catch (err) {
-        console.error('Failed loading tech list:', err);
-        document.getElementById('techSelect').innerHTML = '<option value="">-- Error koneksi server --</option>';
       }
     }
 
@@ -306,9 +299,12 @@ function renderAlkerFormHtml() {
         
         // Reset security state
         document.getElementById('secBadge').className = 'text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 font-mono';
-        document.getElementById('secBadge').innerText = 'BUTUH VERIFIKASI';
+        document.getElementById('secBadge').innerText = 'WAJIB OTP';
         document.getElementById('otpStatusMsg').innerHTML = '';
         document.getElementById('inputOtpOrPin').value = '';
+        document.getElementById('inputOtpOrPin').disabled = false;
+        document.getElementById('btnVerify').disabled = false;
+        document.getElementById('btnRequestOtp').classList.remove('hidden');
       }
 
       // Fetch Alker list for this tech
@@ -355,17 +351,17 @@ function renderAlkerFormHtml() {
         const json = await res.json();
 
         btn.disabled = false;
-        txt.innerText = '📲 Kirim Ulang Kode OTP';
+        txt.innerText = '📲 Minta Ulang Kode OTP';
 
         if (json.success) {
-          msg.innerHTML = \`<span class="text-emerald-400 font-semibold"><i class="fa-solid fa-check mr-1"></i> OTP terkirim ke Telegram \${json.maskedTelegram || ''}! Cek chat bot @jemba12bot</span>\`;
+          msg.innerHTML = \`<span class="text-emerald-400 font-semibold"><i class="fa-solid fa-check mr-1"></i> OTP terkirim ke Telegram \${json.maskedTelegram || ''}! Buka bot @jemba12bot</span>\`;
           document.getElementById('inputOtpOrPin').focus();
         } else {
-          msg.innerHTML = \`<span class="text-amber-400 font-medium">⚠️ \${json.message || 'Telegram ID belum terdaftar. Silakan gunakan NIK Anda.'}</span>\`;
+          msg.innerHTML = \`<span class="text-amber-400 font-medium">⚠️ \${json.message || 'Telegram ID belum terdaftar di NAKER.'}</span>\`;
         }
       } catch (err) {
         btn.disabled = false;
-        txt.innerText = '📲 Kirim Kode OTP ke Telegram';
+        txt.innerText = '📲 Minta Kode OTP ke Telegram Saya';
         msg.innerHTML = \`<span class="text-rose-400">❌ Gagal mengirim: \${err.message}</span>\`;
       }
     }
@@ -378,7 +374,7 @@ function renderAlkerFormHtml() {
       const btn = document.getElementById('btnVerify');
 
       if (!input) {
-        msg.innerHTML = '<span class="text-rose-400">Silakan masukkan Kode OTP atau NIK Anda.</span>';
+        msg.innerHTML = '<span class="text-rose-400">Silakan masukkan 6 Digit Kode OTP Telegram Anda.</span>';
         return;
       }
 
@@ -389,7 +385,7 @@ function renderAlkerFormHtml() {
         const res = await fetch('/api/alker/verify-otp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ technicianName: currentTech.name, nik: currentTech.nik, inputCode: input })
+          body: JSON.stringify({ technicianName: currentTech.name, inputCode: input })
         });
         const json = await res.json();
 
@@ -407,7 +403,7 @@ function renderAlkerFormHtml() {
           document.getElementById('btnRequestOtp').classList.add('hidden');
         } else {
           isSecurityVerified = false;
-          msg.innerHTML = \`<span class="text-rose-400 font-medium">🚫 \${json.message || 'Kode OTP / NIK salah. Coba lagi.'}</span>\`;
+          msg.innerHTML = \`<span class="text-rose-400 font-medium">🚫 \${json.message || 'Kode OTP salah / kedaluwarsa. Silakan minta kode baru.'}</span>\`;
         }
       } catch (err) {
         btn.disabled = false;
@@ -522,14 +518,14 @@ function renderAlkerFormHtml() {
       }
 
       if (!isSecurityVerified) {
-        alert('⚠️ Verifikasi Keamanan Diperlukan!\nSilakan masukkan Kode OTP Telegram atau NIK Anda di bagian Step 2 sebelum menyimpan.');
+        alert('⚠️ Verifikasi OTP Diperlukan!\nSilakan klik tombol "Minta Kode OTP ke Telegram Saya" dan masukkan 6 digit kodenya sebelum menyimpan.');
         document.getElementById('inputOtpOrPin').focus();
         return;
       }
 
       const submitBtn = document.getElementById('btnSubmit');
       submitBtn.disabled = true;
-      submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-slate-950"></i> <span>Menyimpan ke Sheet & Grup...</span>';
+      submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-slate-950"></i> <span>Menyimpan ke Sheet & Broadcast...</span>';
 
       const payload = {
         technicianName: currentTech.name,
@@ -578,7 +574,8 @@ function renderAlkerFormHtml() {
       window.location.reload();
     }
 
-    window.addEventListener('DOMContentLoaded', loadInitialData);
+    // Auto-init immediately
+    initForm();
   </script>
 </body>
 </html>`;

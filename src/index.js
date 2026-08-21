@@ -542,7 +542,16 @@ const server = http.createServer(async (req, res) => {
   // ✅ 5. Halaman Mobile Web Form untuk Checklist Alker
   if (req.method === 'GET' && (pathname === '/form' || pathname === '/mobile' || pathname === '/checklist' || pathname === '/alker/form')) {
     try {
-      const html = renderAlkerFormHtml();
+      const nakerRows = await getSheetRows(SPREADSHEET_ID, SHEET_NAKER, true);
+      const techs = nakerRows.map(n => ({
+        name: String(n['NAMA'] || n['Nama'] || '').trim().toUpperCase(),
+        nik: String(n['NIK'] || '').trim(),
+        sektor: String(n['PSA'] || n['Sektor'] || n['SEKTOR'] || 'BATULICIN').trim().toUpperCase(),
+        leader: String(n['PIC LEADER'] || n['Leader'] || '-').trim(),
+        telegramId: String(n['ID TELEGRAM'] || '').trim()
+      })).filter(t => t.name);
+
+      const html = renderAlkerFormHtml(techs);
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(html);
     } catch (err) {
