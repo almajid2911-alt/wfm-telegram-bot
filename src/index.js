@@ -15,6 +15,7 @@ const runFfg = require('./schedulers/ffg');
 const runTiketPenting = require('./schedulers/tiketPenting');
 const runPoMaterial = require('./schedulers/poMaterial');
 const runPotensiGaulReminder = require('./schedulers/potensiGaul');
+const { runWeeklyAlkerReminder, handleBroadcastAlkerCommand } = require('./schedulers/alkerReminder');
 
 // Interactive Handlers
 const { handleRekonCommand, handleValinsCommand } = require('./commands/rekon');
@@ -59,6 +60,8 @@ cron.schedule('*/24 8-17 * * *',     () => runFfg(),                  { timezone
 cron.schedule('41 8-23 * * *',       () => runTiketPenting(),         { timezone: TIMEZONE });
 // cron.schedule('0 8,16 * * *',        () => runPoMaterial(),           { timezone: TIMEZONE }); // Disabled temporarily
 cron.schedule('19 8,10,12,14,16,18,20 * * *', () => runPotensiGaulReminder(), { timezone: TIMEZONE });
+// Reminder mingguan cek & update alker setiap Senin jam 08:00 WITA
+cron.schedule('0 8 * * 1', () => runWeeklyAlkerReminder(interactiveBot), { timezone: TIMEZONE });
 
 console.log(`✅ [Schedulers] Active cron jobs registered (timezone: ${TIMEZONE})`);
 
@@ -173,6 +176,8 @@ if (interactiveBot) {
     const args = ctx.message.text.trim().split(/\s+/).slice(1).join(' ').trim();
     handleRekapAlkerCommand(ctx, args);
   });
+  interactiveBot.command('broadcastalker', (ctx) => handleBroadcastAlkerCommand(ctx));
+  interactiveBot.command('remindalker',    (ctx) => handleBroadcastAlkerCommand(ctx));
 
   // Callback Query (Tombol Sektor, Unspec & Alker)
   interactiveBot.action('map_batulicin', (ctx) => { ctx.answerCbQuery().catch(() => {}); handleMappingCommand(ctx, 'batulicin'); });
@@ -311,8 +316,9 @@ server.listen(PORT, '0.0.0.0', async () => {
 
         // Daftarkan bot commands menu (hanya sekali setelah webhook berhasil)
         await interactiveBot.telegram.setMyCommands([
-          { command: 'alker',      description: '🛠️ Cek & Update Alat Kerja (Alker)' },
-          { command: 'rekapalker', description: '📊 Rekapitulasi Alker per Sektor (SPV)' },
+          { command: 'alker',          description: '🛠️ Cek & Update Alat Kerja (Alker)' },
+          { command: 'rekapalker',     description: '📊 Rekapitulasi Alker per Sektor (SPV)' },
+          { command: 'broadcastalker', description: '📢 Broadcast Reminder Alker ke Seluruh Teknisi' },
           { command: 'unspec',     description: '📝 Rekap data unspek kendala (Bank Data)' },
           { command: 'mapping',    description: '📊 Mapping WO per sektor' },
           { command: 'tiket',      description: '🎫 Monitoring sisa tiket per sektor' },
