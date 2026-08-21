@@ -301,71 +301,36 @@ server.listen(PORT, '0.0.0.0', async () => {
   // Tidak pakai infinite retry agar tidak kena flood control
   // -------------------------------------------------------------
   if (interactiveBot) {
-    const MAX_ATTEMPTS = 5;
-    let attempt = 0;
+    try {
+      await interactiveBot.telegram.deleteWebhook({ drop_pending_updates: false });
+      console.log('✅ [Interactive Bot] Deleted old webhook, switching to 24/7 Long Polling...');
+      
+      interactiveBot.launch({
+        dropPendingUpdates: false,
+        allowedUpdates: ['message', 'callback_query']
+      });
+      console.log('✅ [Interactive Bot] Long Polling started successfully!');
 
-    async function tryRegisterWebhook() {
-      attempt++;
-      const delay = Math.min(5000 * Math.pow(2, attempt - 1), 60000); // 5s, 10s, 20s, 40s, 60s
+      // Daftarkan bot commands menu
+      await interactiveBot.telegram.setMyCommands([
+        { command: 'alker',          description: '🛠️ Cek & Update Alat Kerja (Alker)' },
+        { command: 'rekapalker',     description: '📊 Rekapitulasi Alker per Sektor (SPV)' },
+        { command: 'broadcastalker', description: '📢 Broadcast Reminder Alker ke Seluruh Teknisi' },
+        { command: 'unspec',         description: '📝 Rekap data unspek kendala (Bank Data)' },
+        { command: 'mapping',        description: '📊 Mapping WO per sektor' },
+        { command: 'tiket',          description: '🎫 Monitoring sisa tiket per sektor' },
+        { command: 'qc',             description: '🚫 Rekapitulasi QC Reject (NOK)' },
+        { command: 'insera',         description: '📌 Cari detail tiket gangguan' },
+        { command: 'bima',           description: '📦 Cari detail order layanan BIMA' },
+        { command: 'rekon',          description: '📋 Cek rekon MTD tim' },
+        { command: 'valins',         description: '🔌 Cek valins ONT baru tim' },
+        { command: 'help',           description: '🤖 Bantuan daftar perintah' }
+      ]).catch(() => {});
+      console.log('✅ [Telegram] Bot commands menu registered!');
 
-      try {
-        console.log(`🔄 [Webhook] Attempt ${attempt}/${MAX_ATTEMPTS} - registering webhook...`);
-
-        await interactiveBot.telegram.setWebhook(WEBHOOK_URL, {
-          allowed_updates: ['message', 'callback_query'],
-          drop_pending_updates: true
-        });
-
-        const info = await interactiveBot.telegram.getWebhookInfo();
-        console.log(`✅ [Webhook] Successfully registered!`);
-        console.log(`   URL     : ${info.url}`);
-        console.log(`   Pending : ${info.pending_update_count}`);
-
-        // Daftarkan bot commands menu (hanya sekali setelah webhook berhasil)
-        await interactiveBot.telegram.setMyCommands([
-          { command: 'alker',          description: '🛠️ Cek & Update Alat Kerja (Alker)' },
-          { command: 'rekapalker',     description: '📊 Rekapitulasi Alker per Sektor (SPV)' },
-          { command: 'broadcastalker', description: '📢 Broadcast Reminder Alker ke Seluruh Teknisi' },
-          { command: 'unspec',     description: '📝 Rekap data unspek kendala (Bank Data)' },
-          { command: 'mapping',    description: '📊 Mapping WO per sektor' },
-          { command: 'tiket',      description: '🎫 Monitoring sisa tiket per sektor' },
-          { command: 'qc',         description: '🚫 Rekapitulasi QC Reject (NOK)' },
-          { command: 'insera',     description: '📌 Cari detail tiket gangguan' },
-          { command: 'bima',       description: '📦 Cari detail order layanan BIMA' },
-          { command: 'rekon',      description: '📋 Cek rekon MTD tim' },
-          { command: 'valins',     description: '🔌 Cek valins ONT baru tim' },
-          { command: 'help',       description: '🤖 Bantuan daftar perintah' }
-        ]).catch(() => {});
-        console.log('✅ [Telegram] Bot commands menu registered!');
-
-      } catch (err) {
-        // Handle 429 Rate Limit khusus
-        if (err.response && err.response.error_code === 429) {
-          const retryAfter = (err.response.parameters?.retry_after || 30) * 1000;
-          console.warn(`⚠️ [Webhook] Rate limited (429). Telegram minta tunggu ${retryAfter/1000}s`);
-          if (attempt < MAX_ATTEMPTS) {
-            setTimeout(tryRegisterWebhook, retryAfter + 2000);
-          } else {
-            console.error(`❌ [Webhook] Max attempts reached. Webhook tidak terdaftar otomatis.`);
-            console.error(`   → Jalankan manual: node set_webhook_raw.js`);
-          }
-          return;
-        }
-
-        console.warn(`⚠️ [Webhook] Attempt ${attempt} failed: ${err.message}`);
-
-        if (attempt < MAX_ATTEMPTS) {
-          console.log(`   → Retry dalam ${delay/1000}s...`);
-          setTimeout(tryRegisterWebhook, delay);
-        } else {
-          console.error(`❌ [Webhook] Max ${MAX_ATTEMPTS} attempts reached. Webhook tidak terdaftar otomatis.`);
-          console.error(`   → Jalankan manual dari Railway Console: node set_webhook_raw.js`);
-        }
-      }
+    } catch (err) {
+      console.warn('⚠️ [Interactive Bot Launch Error]:', err.message);
     }
-
-    // Mulai dengan delay 3 detik agar server benar-benar siap dulu
-    setTimeout(tryRegisterWebhook, 3000);
   }
 });
 
