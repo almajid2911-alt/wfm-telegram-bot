@@ -31,6 +31,37 @@ function parseDevice(devName) {
   return codeOnly;
 }
 
+function formatUkurStatus(hasilUkur, redaman) {
+  const hasil = cleanText(hasilUkur).toUpperCase();
+  const red = cleanText(redaman);
+  const redVal = parseFloat(red.replace(',', '.'));
+
+  if (hasil === 'ONLINE') {
+    if (!isNaN(redVal)) {
+      if (redVal >= -24.0) {
+        return `🟢 ${redVal.toFixed(1)} dBm`;
+      } else {
+        return `🟡 ${redVal.toFixed(1)} dBm`;
+      }
+    }
+    return '🟢 ONLINE';
+  }
+
+  if (hasil.includes('LOS') || hasil.includes('LOSS')) {
+    return '🔴 LOS';
+  }
+
+  if (hasil.includes('OFFLINE')) {
+    return '🔴 OFFLINE';
+  }
+
+  if (!hasil || hasil === '-') {
+    return '⚪ -';
+  }
+
+  return `⚪ ${hasil}`;
+}
+
 async function handleTiketCommand(ctx, inputRaw) {
   const text = (inputRaw || '').toLowerCase().trim();
 
@@ -90,6 +121,7 @@ async function handleTiketCommand(ctx, inputRaw) {
       const device = parseDevice(data['DEVICE NAME'] || data['Device Name'] || data['IZIN JANGAN DI HAPUS JIDLAH'] || data['ODC REAL']);
       const ttrFormatted = formatTTR(data.TTR);
       const timName = cleanText(data.TIM || data.Tim || data['TIM KAWAN']) || 'TANPA TIM';
+      const statusUkur = formatUkurStatus(data['HASIL UKUR'] || data['Hasil Ukur'], data.REDAMAN || data.Redaman);
 
       if (!incident) continue;
 
@@ -108,6 +140,7 @@ async function handleTiketCommand(ctx, inputRaw) {
         incident,
         device,
         ttr: ttrFormatted,
+        statusUkur,
         timName,
         category,
         isPriority
@@ -150,7 +183,7 @@ async function handleTiketCommand(ctx, inputRaw) {
         const fireEmoji = item.isPriority ? ' 🔥' : '';
         const isLast = (i === regulerList.length - 1);
         const prefix = isLast ? '└─' : '├─';
-        msg += `${prefix} \`${item.incident}\` - *${item.device}* - \`${item.ttr}\` - *${item.timName}*${fireEmoji}\n`;
+        msg += `${prefix} \`${item.incident}\` - *${item.device}* - \`${item.ttr}\` - ${item.statusUkur} - *${item.timName}*${fireEmoji}\n`;
       }
       msg += '\n';
     }
@@ -169,7 +202,7 @@ async function handleTiketCommand(ctx, inputRaw) {
         const fireEmoji = item.isPriority ? ' 🔥' : '';
         const isLast = (i === gamasList.length - 1);
         const prefix = isLast ? '└─' : '├─';
-        msg += `${prefix} \`${item.incident}\` - *${item.device}* - \`${item.ttr}\` - *${item.timName}*${fireEmoji}\n`;
+        msg += `${prefix} \`${item.incident}\` - *${item.device}* - \`${item.ttr}\` - ${item.statusUkur} - *${item.timName}*${fireEmoji}\n`;
       }
       msg += '\n';
     }
@@ -186,11 +219,11 @@ async function handleTiketCommand(ctx, inputRaw) {
       const fireEmoji = item.isPriority ? ' 🔥' : '';
       const isLast = (i === allTiketList.length - 1);
       const prefix = isLast ? '└─' : '├─';
-      msg += `${prefix} \`${item.incident}\` - *${item.device}* - \`${item.ttr}\` - *${item.category}*${fireEmoji}\n`;
+      msg += `${prefix} \`${item.incident}\` - *${item.device}* - \`${item.ttr}\` - ${item.statusUkur} - *${item.category}*${fireEmoji}\n`;
     }
 
     msg += '\n─────────────────────────\n';
-    msg += '📌 *KETERANGAN:* 🔥:Diamond/Platinum';
+    msg += '📌 *KETERANGAN:* 🔥:Diamond/Platinum | 🟢:Online (< -24 dBm) | 🟡:Redaman Tinggi (> -24 dBm) | 🔴:LOS/Offline';
 
     await ctx.reply(msg.trimEnd(), { parse_mode: 'Markdown' });
   } catch (err) {
