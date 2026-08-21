@@ -417,8 +417,126 @@ async function saveAlkerStatusUpdate(ctx, { techName, alkerName, idAlker, status
   }
 }
 
+/**
+ * =========================================================================
+ * FITUR REKAP ALKER UNTUK SPV / LEADER (/rekapalker)
+ * =========================================================================
+ */
+async function handleRekapAlkerCommand(ctx, inputSektor = '') {
+  const query = (inputSektor || '').trim().toLowerCase();
+  const loadingMsg = await ctx.reply('⏳ <i>Menghitung rekapitulasi data alker WFM...</i>', { parse_mode: 'HTML' });
+
+  try {
+    const [alkerRows, nakerRows] = await Promise.all([
+      getSheetRows(SPREADSHEET_ID, SHEET_ALKER, true),
+      getSheetRows(SPREADSHEET_ID, SHEET_NAKER, true)
+    ]);
+
+    // Pemetaan Sektor Naker
+    const techSektorMap = {};
+    nakerRows.forEach(n => {
+      const name = String(n['NAMA'] || n['Nama'] || '').trim().toUpperCase();
+      const psa = String(n['PSA'] || n['Sektor'] || n['SEKTOR'] || '').trim().toUpperCase();
+      if (name) techSektorMap[name] = psa || 'BATULICIN';
+    });
+
+    let filterSektor = '';
+    if (query.includes('batulicin') || query.includes('blc')) filterSektor = 'BATULICIN';
+    else if (query.includes('kotabaru') || query.includes('kpl')) filterSektor = 'KOTABARU';
+    else if (query.includes('satui') || query.includes('sti')) filterSektor = 'SATUI';
+
+    // Saring baris
+    let targetAlkers = alkerRows;
+    if (filterSektor) {
+      targetAlkers = alkerRows.filter(a => {
+        const t = String(a['Teknisi'] || a['TEKNISI'] || '').trim().toUpperCase();
+        const sek = techSektorMap[t] || '';
+        return sek.includes(filterSektor);
+      });
+    }
+
+    let totalItems = 0;
+    let normalCount = 0;
+    let rusakCount = 0;
+    let missingCount = 0;
+    const rusakList = [];
+    const uniqueTechs = new Set();
+
+    targetAlkers.forEach(item => {
+      const tech = String(item['Teknisi'] || item['TEKNISI'] || '').trim();
+      const alker = String(item['Nama Alker'] || item['NAMA ALKER'] || '').trim();
+      const status = String(item['Status'] || item['STATUS'] || '').trim().toLowerCase();
+      const ket = String(item['Keterangan'] || '').trim();
+
+      if (!tech || !alker) return;
+      uniqueTechs.add(tech.toUpperCase());
+      totalItems++;
+
+      if (status === 'normal') {
+        normalCount++;
+      } else if (status === 'rusak') {
+        rusakCount++;
+        rusakList.push({ tech, alker, status: '🔴 Rusak', ket: ket || 'Rusak' });
+      } else if (status === 'tidak ada' || status === 'hilang') {
+        missingCount++;
+        rusakList.push({ tech, alker, status: '❌ Tidak Ada', ket: ket || 'Hilang' });
+      }
+    });
+
+    const normalPercent = totalItems > 0 ? ((normalCount / totalItems) * 100).toFixed(1) : '0';
+    const titleSektor = filterSektor ? `SEKTOR ${filterSektor}` : 'SEMUA SEKTOR';
+
+    let card = `📊 <b>REKAPITULASI ALKER WFM [${titleSektor}]</b>\n`;
+    card += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    card += `👥 <b>Total Teknisi  :</b> ${uniqueTechs.size} Orang\n`;
+    card += `📦 <b>Total Alat     :</b> ${totalItems} Item\n`;
+    card += `🟢 <b>Kondisi Normal :</b> <b>${normalCount}</b> item (${normalPercent}%)\n`;
+    card += `🔴 <b>Kondisi Rusak  :</b> <b>${rusakCount}</b> item\n`;
+    card += `❌ <b>Tidak Ada/Hilang:</b> <b>${missingCount}</b> item\n`;
+    card += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+
+    if (rusakList.length > 0) {
+      card += `⚠️ <b>DAFTAR ALKER BERMASALAH (Top ${Math.min(rusakList.length, 12)}):</b>\n`;
+      rusakList.slice(0, 12).forEach((r, i) => {
+        card += `${i + 1}. <b>${escapeHtml(r.tech)}</b>: ${escapeHtml(r.alker)} (${r.status}${r.ket ? ' - <i>' + escapeHtml(r.ket) + '</i>' : ''})\n`;
+      });
+      if (rusakList.length > 12) {
+        card += `<i>...dan ${rusakList.length - 12} alat bermasalah lainnya di sheet SPV.</i>\n`;
+      }
+    } else {
+      card += `✨ <i>Semua alat kerja tercatat dalam kondisi NORMAL & BAIK.</i>\n`;
+    }
+
+    card += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    card += `👇 <i>Pilih filter sektor di bawah:</i>`;
+
+    const buttons = [
+      [
+        Markup.button.callback('🏙️ Batulicin', 'rekap_alker_batulicin'),
+        Markup.button.callback('🏝️ Kotabaru', 'rekap_alker_kotabaru'),
+        Markup.button.callback('🌾 Satui', 'rekap_alker_satui')
+      ],
+      [
+        Markup.button.callback('🌐 Semua Sektor', 'rekap_alker_all')
+      ]
+    ];
+
+    await ctx.deleteMessage(loadingMsg.message_id).catch(() => {});
+    return ctx.reply(card, {
+      parse_mode: 'HTML',
+      ...Markup.inlineKeyboard(buttons)
+    });
+
+  } catch (err) {
+    console.error('❌ [Rekap Alker Error]:', err.message);
+    await ctx.deleteMessage(loadingMsg.message_id).catch(() => {});
+    return ctx.reply(`⚠️ Gagal memuat rekap alker: ${escapeHtml(err.message)}`, { parse_mode: 'HTML' });
+  }
+}
+
 module.exports = {
   handleAlkerCommand,
   handleAlkerCallback,
-  handleAlkerMessage
+  handleAlkerMessage,
+  handleRekapAlkerCommand
 };

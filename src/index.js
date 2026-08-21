@@ -24,7 +24,7 @@ const handleMappingCommand = require('./commands/mapping');
 const handleTiketCommand = require('./commands/tiket');
 const handleQcCommand = require('./commands/qc');
 const { handleUnspecCommand, handleUnspecMessage, handleUnspecCallback } = require('./commands/unspec');
-const { handleAlkerCommand, handleAlkerCallback, handleAlkerMessage } = require('./commands/alker');
+const { handleAlkerCommand, handleAlkerCallback, handleAlkerMessage, handleRekapAlkerCommand } = require('./commands/alker');
 
 console.log('=============================================');
 console.log('🚀 WFM TELEGRAM BOT ENGINE STARTING...');
@@ -165,6 +165,14 @@ if (interactiveBot) {
     const args = ctx.message.text.trim().split(/\s+/).slice(1).join(' ').trim();
     handleAlkerCommand(ctx, args);
   });
+  interactiveBot.command('rekapalker', (ctx) => {
+    const args = ctx.message.text.trim().split(/\s+/).slice(1).join(' ').trim();
+    handleRekapAlkerCommand(ctx, args);
+  });
+  interactiveBot.command('rekap_alker', (ctx) => {
+    const args = ctx.message.text.trim().split(/\s+/).slice(1).join(' ').trim();
+    handleRekapAlkerCommand(ctx, args);
+  });
 
   // Callback Query (Tombol Sektor, Unspec & Alker)
   interactiveBot.action('map_batulicin', (ctx) => { ctx.answerCbQuery().catch(() => {}); handleMappingCommand(ctx, 'batulicin'); });
@@ -175,6 +183,10 @@ if (interactiveBot) {
   interactiveBot.action('tkt_satui',     (ctx) => { ctx.answerCbQuery().catch(() => {}); handleTiketCommand(ctx, 'satui'); });
   interactiveBot.action('unspec_start_again', (ctx) => { ctx.answerCbQuery().catch(() => {}); handleUnspecCommand(ctx, ''); });
   interactiveBot.action(/^unspec_/, async (ctx) => { await handleUnspecCallback(ctx); });
+  interactiveBot.action('rekap_alker_batulicin', (ctx) => { ctx.answerCbQuery().catch(() => {}); handleRekapAlkerCommand(ctx, 'batulicin'); });
+  interactiveBot.action('rekap_alker_kotabaru',  (ctx) => { ctx.answerCbQuery().catch(() => {}); handleRekapAlkerCommand(ctx, 'kotabaru'); });
+  interactiveBot.action('rekap_alker_satui',     (ctx) => { ctx.answerCbQuery().catch(() => {}); handleRekapAlkerCommand(ctx, 'satui'); });
+  interactiveBot.action('rekap_alker_all',       (ctx) => { ctx.answerCbQuery().catch(() => {}); handleRekapAlkerCommand(ctx, ''); });
   interactiveBot.action(/^alker_refresh_/, (ctx) => {
     const tech = decodeURIComponent(ctx.callbackQuery.data.replace('alker_refresh_', ''));
     ctx.answerCbQuery().catch(() => {});
@@ -270,16 +282,17 @@ server.listen(PORT, '0.0.0.0', async () => {
 
         // Daftarkan bot commands menu (hanya sekali setelah webhook berhasil)
         await interactiveBot.telegram.setMyCommands([
-          { command: 'alker',   description: '🛠️ Cek & Update Alat Kerja (Alker)' },
-          { command: 'unspec',  description: '📝 Rekap data unspek kendala (Bank Data)' },
-          { command: 'mapping', description: '📊 Mapping WO per sektor' },
-          { command: 'tiket',   description: '🎫 Monitoring sisa tiket per sektor' },
-          { command: 'qc',      description: '🚫 Rekapitulasi QC Reject (NOK)' },
-          { command: 'insera',  description: '📌 Cari detail tiket gangguan' },
-          { command: 'bima',    description: '📦 Cari detail order layanan BIMA' },
-          { command: 'rekon',   description: '📋 Cek rekon MTD tim' },
-          { command: 'valins',  description: '🔌 Cek valins ONT baru tim' },
-          { command: 'help',    description: '🤖 Bantuan daftar perintah' }
+          { command: 'alker',      description: '🛠️ Cek & Update Alat Kerja (Alker)' },
+          { command: 'rekapalker', description: '📊 Rekapitulasi Alker per Sektor (SPV)' },
+          { command: 'unspec',     description: '📝 Rekap data unspek kendala (Bank Data)' },
+          { command: 'mapping',    description: '📊 Mapping WO per sektor' },
+          { command: 'tiket',      description: '🎫 Monitoring sisa tiket per sektor' },
+          { command: 'qc',         description: '🚫 Rekapitulasi QC Reject (NOK)' },
+          { command: 'insera',     description: '📌 Cari detail tiket gangguan' },
+          { command: 'bima',       description: '📦 Cari detail order layanan BIMA' },
+          { command: 'rekon',      description: '📋 Cek rekon MTD tim' },
+          { command: 'valins',     description: '🔌 Cek valins ONT baru tim' },
+          { command: 'help',       description: '🤖 Bantuan daftar perintah' }
         ]).catch(() => {});
         console.log('✅ [Telegram] Bot commands menu registered!');
 
