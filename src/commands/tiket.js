@@ -31,6 +31,14 @@ function parseDevice(devName) {
   return codeOnly;
 }
 
+const escapeHtml = (str) => {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+};
+
 function formatUkurStatus(hasilUkur, redaman) {
   const hasil = cleanText(hasilUkur).toUpperCase();
   const red = cleanText(redaman);
@@ -55,11 +63,15 @@ function formatUkurStatus(hasilUkur, redaman) {
     return '🔴 OFFLINE';
   }
 
+  if (hasil.includes('DYING')) {
+    return '⚪ DYING GASP';
+  }
+
   if (!hasil || hasil === '-') {
     return '⚪ -';
   }
 
-  return `⚪ ${hasil}`;
+  return `⚪ ${escapeHtml(hasil.replace(/_/g, ' '))}`;
 }
 
 async function handleTiketCommand(ctx, inputRaw) {
@@ -83,9 +95,9 @@ async function handleTiketCommand(ctx, inputRaw) {
 
   if (zones.length === 0) {
     return ctx.reply(
-      '🎫 *PILIH SEKTOR MONITORING TIKET*\n\nSilakan pilih salah satu tombol sektor di bawah:',
+      '🎫 <b>PILIH SEKTOR MONITORING TIKET</b>\n\nSilakan pilih salah satu tombol sektor di bawah:',
       {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...Markup.inlineKeyboard([
           [
             Markup.button.callback('🏙️ Batulicin', 'tkt_batulicin'),
@@ -107,7 +119,7 @@ async function handleTiketCommand(ctx, inputRaw) {
     });
 
     if (!rows.length) {
-      return ctx.reply(`⚠️ *Tidak ada data Tiket untuk sektor ${sektorName}*`, { parse_mode: 'Markdown' });
+      return ctx.reply(`⚠️ <b>Tidak ada data Tiket untuk sektor ${escapeHtml(sektorName)}</b>`, { parse_mode: 'HTML' });
     }
 
     let regulerList = [];
@@ -162,20 +174,20 @@ async function handleTiketCommand(ctx, inputRaw) {
     };
 
     let msg = '=================================\n';
-    msg += `🎫 *MONITORING TIKET: ${sektorName}*\n`;
-    msg += `🕒 _Update: ${getTimeWITA()}_\n`;
+    msg += `🎫 <b>MONITORING TIKET: ${escapeHtml(sektorName)}</b>\n`;
+    msg += `🕒 <i>Update: ${getTimeWITA()}</i>\n`;
     msg += '=================================\n\n';
 
-    msg += '📌 *RINGKASAN TIKET*\n';
-    msg += `└─ 📦 Total Tiket : *${allTiketList.length}*\n\n`;
+    msg += '📌 <b>RINGKASAN TIKET</b>\n';
+    msg += `└─ 📦 Total Tiket : <b>${allTiketList.length}</b>\n\n`;
 
     // 1. TIKET REGULER
     msg += '═════════════════════════\n';
-    msg += '🟢 *TIKET REGULER (SORT BY NAMA TIM)*\n';
+    msg += '🟢 <b>TIKET REGULER (SORT BY NAMA TIM)</b>\n';
     msg += '═════════════════════════\n\n';
 
     if (regulerList.length === 0) {
-      msg += '_Tidak ada tiket reguler_\n\n';
+      msg += '<i>Tidak ada tiket reguler</i>\n\n';
     } else {
       regulerList.sort(sortByTim);
       for (let i = 0; i < regulerList.length; i++) {
@@ -183,18 +195,18 @@ async function handleTiketCommand(ctx, inputRaw) {
         const fireEmoji = item.isPriority ? ' 🔥' : '';
         const isLast = (i === regulerList.length - 1);
         const prefix = isLast ? '└─' : '├─';
-        msg += `${prefix} \`${item.incident}\` - *${item.device}* - \`${item.ttr}\` - ${item.statusUkur} - *${item.timName}*${fireEmoji}\n`;
+        msg += `${prefix} <code>${escapeHtml(item.incident)}</code> - <b>${escapeHtml(item.device)}</b> - <code>${item.ttr}</code> - ${item.statusUkur} - <b>${escapeHtml(item.timName)}</b>${fireEmoji}\n`;
       }
       msg += '\n';
     }
 
     // 2. TIKET GAMAS
     msg += '═════════════════════════\n';
-    msg += '⚠️ *TIKET GAMAS (SORT BY NAMA TIM)*\n';
+    msg += '⚠️ <b>TIKET GAMAS (SORT BY NAMA TIM)</b>\n';
     msg += '═════════════════════════\n\n';
 
     if (gamasList.length === 0) {
-      msg += '_Tidak ada tiket gamas_\n\n';
+      msg += '<i>Tidak ada tiket gamas</i>\n\n';
     } else {
       gamasList.sort(sortByTim);
       for (let i = 0; i < gamasList.length; i++) {
@@ -202,14 +214,14 @@ async function handleTiketCommand(ctx, inputRaw) {
         const fireEmoji = item.isPriority ? ' 🔥' : '';
         const isLast = (i === gamasList.length - 1);
         const prefix = isLast ? '└─' : '├─';
-        msg += `${prefix} \`${item.incident}\` - *${item.device}* - \`${item.ttr}\` - ${item.statusUkur} - *${item.timName}*${fireEmoji}\n`;
+        msg += `${prefix} <code>${escapeHtml(item.incident)}</code> - <b>${escapeHtml(item.device)}</b> - <code>${item.ttr}</code> - ${item.statusUkur} - <b>${escapeHtml(item.timName)}</b>${fireEmoji}\n`;
       }
       msg += '\n';
     }
 
     // 3. ALL TIKET
     msg += '═════════════════════════\n';
-    msg += '📊 *ALL TIKET (SORT BY ODC)*\n';
+    msg += '📊 <b>ALL TIKET (SORT BY ODC)</b>\n';
     msg += '═════════════════════════\n\n';
 
     allTiketList.sort((a, b) => a.device.localeCompare(b.device, undefined, { numeric: true, sensitivity: 'base' }));
@@ -219,16 +231,16 @@ async function handleTiketCommand(ctx, inputRaw) {
       const fireEmoji = item.isPriority ? ' 🔥' : '';
       const isLast = (i === allTiketList.length - 1);
       const prefix = isLast ? '└─' : '├─';
-      msg += `${prefix} \`${item.incident}\` - *${item.device}* - \`${item.ttr}\` - ${item.statusUkur} - *${item.category}*${fireEmoji}\n`;
+      msg += `${prefix} <code>${escapeHtml(item.incident)}</code> - <b>${escapeHtml(item.device)}</b> - <code>${item.ttr}</code> - ${item.statusUkur} - <b>${escapeHtml(item.category)}</b>${fireEmoji}\n`;
     }
 
     msg += '\n─────────────────────────\n';
-    msg += '📌 *KETERANGAN:* 🔥:Diamond/Platinum | 🟢:Online (< -24 dBm) | 🟡:Redaman Tinggi (> -24 dBm) | 🔴:LOS/Offline';
+    msg += '📌 <b>KETERANGAN:</b> 🔥:Diamond/Platinum | 🟢:Online (&lt; -24 dBm) | 🟡:Redaman Tinggi (&gt; -24 dBm) | 🔴:LOS/Offline';
 
-    await ctx.reply(msg.trimEnd(), { parse_mode: 'Markdown' });
+    await ctx.reply(msg.trimEnd(), { parse_mode: 'HTML' });
   } catch (err) {
     console.error('[Command Error] /tiket:', err.message);
-    ctx.reply('❌ Error: ' + err.message);
+    ctx.reply('❌ Error: ' + escapeHtml(err.message), { parse_mode: 'HTML' });
   }
 }
 
