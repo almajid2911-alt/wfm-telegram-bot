@@ -76,6 +76,27 @@ async function fetchGaulRows() {
   return await getSheetRows(SPREADSHEET_ID, SHEET_NAME_GAUL, true);
 }
 
+function isPotensiGaulResolved(row) {
+  const newHasil = norm(row['NEW HASIL UKUR'] || row['new_hasil_ukur'] || row['New Hasil Ukur']).toUpperCase();
+  const newRedamanRaw = norm(row['NEW REDAMAN'] || row['new_redaman'] || row['New Redaman']);
+
+  if (newHasil === 'ONLINE' || newHasil.includes('ONLINE')) {
+    if (!newRedamanRaw || newRedamanRaw === '-') {
+      return true;
+    }
+    const redVal = parseFloat(newRedamanRaw.replace(',', '.'));
+    if (!isNaN(redVal)) {
+      // Redaman spec: >= -25.0 dBm (misal: -24.68, -23.76, -21.55, -16.19) atau nilai absolut <= 25.0
+      if (redVal >= -25.0 || Math.abs(redVal) <= 25.0) {
+        return true;
+      }
+    } else {
+      return true;
+    }
+  }
+  return false;
+}
+
 async function runPotensiGaulReminder() {
   console.log('[Scheduler] Running Potensi Gaul Reminder...');
   try {
@@ -88,6 +109,11 @@ async function runPotensiGaulReminder() {
     const groupedByTeam = {};
 
     for (const row of gaulRows) {
+      // Lewati pelanggan yang new hasil ukurnya sudah ONLINE dan redaman in-spec (<= 25 dBm / >= -25 dBm)
+      if (isPotensiGaulResolved(row)) {
+        continue;
+      }
+
       const inc = norm(row['INCIDENT'] || row['incident']).toUpperCase();
       const serviceNo = norm(row['SERVICE NO'] || row['service_no'] || row['Service No']);
       const odp = cleanOdp(row['ODP'] || row['odp'] || (row['DEVICE NAME'] || '').split('/')[0]);
