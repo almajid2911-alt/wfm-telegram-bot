@@ -4,9 +4,12 @@ const { getSheetRows } = require('../config/google');
 const SPREADSHEET_ID = process.env.SPREADSHEET_DATA_WFM_ID || '1m5bgXaDBFAhwKJlLRdPsgf4pJBA0YhFhR6C9bDytm-I';
 const SHEET_NAME = 'DATA MASTER WFM';
 
-const escapeMarkdown = (text) => {
-  if (!text) return '';
-  return text.toString().replace(/([*_[\]`])/g, '\\$1');
+const escapeHtml = (str) => {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 };
 
 function extractPhoneNumbers(raw) {
@@ -32,7 +35,7 @@ async function handleBimaCommand(ctx, rawKeyword) {
   const searchedTicket = (rawKeyword || '').trim().toUpperCase();
 
   if (!searchedTicket) {
-    return ctx.reply('⚠️ Format: `/bima <TRACK_ORDER/WO>` atau langsung ketik `AOi4260703030410498314480`', { parse_mode: 'Markdown' });
+    return ctx.reply('⚠️ Format: <code>/bima &lt;TRACK_ORDER/WO&gt;</code> atau langsung ketik <code>AOi4260703030410498314480</code>', { parse_mode: 'HTML' });
   }
 
   try {
@@ -45,7 +48,7 @@ async function handleBimaCommand(ctx, rawKeyword) {
     });
 
     if (!match) {
-      return ctx.reply(`⚠️ *ORDER TIDAK DITEMUKAN*\n━━━━━━━━━━━━━━━━━━\nMaaf, data untuk order/tiket \`${searchedTicket}\` tidak ditemukan di database Google Sheets.\n\nSilakan periksa kembali nomor yang Anda masukkan.`, { parse_mode: 'Markdown' });
+      return ctx.reply(`⚠️ <b>ORDER TIDAK DITEMUKAN</b>\n━━━━━━━━━━━━━━━━━━\nMaaf, data untuk order/tiket <code>${escapeHtml(searchedTicket)}</code> tidak ditemukan di database Google Sheets.\n\nSilakan periksa kembali nomor yang Anda masukkan.`, { parse_mode: 'HTML' });
     }
 
     const getVal = (keyNames) => {
@@ -66,53 +69,69 @@ async function handleBimaCommand(ctx, rawKeyword) {
     const rawContactNumber = getVal(['Contact Number', 'Contact_Number', 'CONTACT NUMBER', 'contact_number', 'CONTACT PHONE', 'Contact Phone']) || '-';
     const odc = getVal(['ODC', 'odc', 'DEVICE NAME', 'device_name', 'ODP', 'odp']) || '-';
 
-    let customerName = getVal(['Customer Name', 'Customer_Name', 'CUSTOMER NAME', 'customer_name']) || '-';
-    customerName = escapeMarkdown(customerName.toUpperCase());
+    const customerName = (getVal(['Customer Name', 'Customer_Name', 'CUSTOMER NAME', 'customer_name']) || '-').toUpperCase();
+    const jenisOrder = (getVal(['jenis order', 'Jenis order', 'Jenis_order', 'JENIS ORDER', 'Segment', 'productname']) || '-').toUpperCase();
 
-    let jenisOrder = getVal(['jenis order', 'Jenis order', 'Jenis_order', 'JENIS ORDER', 'Segment', 'productname']) || '-';
-    jenisOrder = escapeMarkdown(jenisOrder.toUpperCase());
-
-    const status = escapeMarkdown(getVal(['Status', 'STATUS', 'status']) || '-');
-    const tim = escapeMarkdown(getVal(['tim', 'TIM', 'Tim']) || '-');
-    const cekQc = escapeMarkdown(getVal(['cek qc', 'CEK QC', 'Cek QC', 'cek_qc']) || '-');
-    const statusMorning = escapeMarkdown(getVal(['status morning', 'STATUS MORNING', 'Status Morning', 'status_morning']) || '-');
-    const catatan = escapeMarkdown(getVal(['Catatan', 'catatan', 'CATATAN']) || '-');
-
-    const tglManja = escapeMarkdown(getVal(['TGL MANJA', 'Tgl Manja', 'Tgl_Manja', 'tgl_manja', 'MANJA', 'Booking Date']) || '-');
-    const paket = escapeMarkdown(getVal(['PAKET', 'paket', 'Product Name', 'product_name', 'Description', 'description']) || '-');
-    const address = escapeMarkdown(getVal(['Address', 'address', 'ADDRESS', 'Service Address', 'Alamat']) || '-');
+    const status = getVal(['Status', 'STATUS', 'status']) || '-';
+    const statusMorning = getVal(['status morning', 'STATUS MORNING', 'Status Morning', 'status_morning']) || '';
+    const tim = getVal(['tim', 'TIM', 'Tim', 'TIM KAWAN', 'TEKNISI']) || '';
+    const cekQc = getVal(['cek qc', 'CEK QC', 'Cek QC', 'cek_qc', 'VALIDASI', 'validasi']) || '';
+    const eskalDaman = getVal(['Eskal daman', 'eskal_daman', 'ESKAL DAMAN', 'Eskal Daman', 'eskal daman']) || '';
+    const tglManja = getVal(['TGL MANJA', 'Tgl Manja', 'Tgl_Manja', 'tgl_manja', 'MANJA', 'Booking Date', 'Sched Start']) || '';
+    const paket = getVal(['PAKET', 'paket', 'Product Name', 'product_name', 'Description', 'description']) || '-';
+    const lensa = getVal(['LENSA', 'Lensa', 'lensa']) || '';
+    const wecare = getVal(['WECARE', 'Wecare', 'wecare', 'WE CARE', 'We Care']) || '';
+    const valins = getVal(['VALINS', 'Valins', 'valins']) || '';
+    const snOnt = getVal(['SN ONT', 'Sn Ont', 'sn_ont', 'SN_ONT', 'sn ont', 'SERIAL NUMBER']) || '';
+    const catatan = getVal(['Catatan', 'catatan', 'CATATAN', 'Keterangan', 'keterangan']) || '';
+    const address = getVal(['Address', 'address', 'ADDRESS', 'Service Address', 'Alamat']) || '-';
 
     // Ekstrak dan bersihkan nomor HP (deduplikasi nomor ganda)
     const phoneList = extractPhoneNumbers(rawContactNumber);
     const displayPhone = phoneList.length > 0 ? phoneList.join(' / ') : rawContactNumber;
 
-    let msg = '📌 *DETAIL ORDER LAYANAN*\n';
+    let msg = '📌 <b>DETAIL ORDER LAYANAN</b>\n';
     msg += '━━━━━━━━━━━━━━━━━━\n';
-    msg += `🆔 *Track Order:* \`${trackOrder}\`\n`;
-    msg += `👤 *Customer Name:* ${customerName}\n`;
-    msg += `📞 *Contact Number:* \`${displayPhone}\`\n`;
-    msg += `📦 *Jenis Order:* ${jenisOrder}\n`;
+    msg += `🆔 <b>Track Order:</b> <code>${escapeHtml(trackOrder)}</code>\n`;
+    msg += `👤 <b>Customer Name:</b> <b>${escapeHtml(customerName)}</b>\n`;
+    msg += `📞 <b>Contact Number:</b> <code>${escapeHtml(displayPhone)}</code>\n`;
+    msg += `📦 <b>Jenis Order:</b> <b>${escapeHtml(jenisOrder)}</b>\n`;
     if (status && status !== '-') {
-      msg += `📊 *Status:* *${status}*\n`;
-    }
-    if (tim && tim !== '-') {
-      msg += `👷 *Tim:* \`${tim}\`\n`;
-    }
-    if (cekQc && cekQc !== '-') {
-      msg += `🔍 *Cek QC:* ${cekQc}\n`;
+      msg += `📊 <b>Status:</b> <b>${escapeHtml(status)}</b>\n`;
     }
     if (statusMorning && statusMorning !== '-') {
-      msg += `🌅 *Status Morning:* *${statusMorning}*\n`;
+      msg += `🌅 <b>Status Morning:</b> <b>${escapeHtml(statusMorning)}</b>\n`;
     }
-    msg += `🔌 *ODC:* \`${odc}\`\n`;
+    if (tim && tim !== '-') {
+      msg += `👷 <b>Tim:</b> <code>${escapeHtml(tim)}</code>\n`;
+    }
+    if (cekQc && cekQc !== '-') {
+      msg += `🔍 <b>Cek QC:</b> ${escapeHtml(cekQc)}\n`;
+    }
+    if (eskalDaman && eskalDaman !== '-') {
+      msg += `⚡ <b>Eskal Daman:</b> ${escapeHtml(eskalDaman)}\n`;
+    }
+    msg += `🔌 <b>ODC:</b> <code>${escapeHtml(odc)}</code>\n`;
     if (tglManja && tglManja !== '-') {
-      msg += `📅 *TGL Manja:* ${tglManja}\n`;
+      msg += `📅 <b>TGL Manja:</b> ${escapeHtml(tglManja)}\n`;
     }
-    msg += `🏷️ *Paket:* ${paket}\n`;
+    msg += `🏷️ <b>Paket:</b> ${escapeHtml(paket)}\n`;
+    if (lensa && lensa !== '-') {
+      msg += `📷 <b>LENSA:</b> <b>${escapeHtml(lensa)}</b>\n`;
+    }
+    if (wecare && wecare !== '-') {
+      msg += `🛡️ <b>WECARE:</b> <b>${escapeHtml(wecare)}</b>\n`;
+    }
+    if (valins && valins !== '-') {
+      msg += `📋 <b>VALINS:</b> <b>${escapeHtml(valins)}</b>\n`;
+    }
+    if (snOnt && snOnt !== '-') {
+      msg += `🔢 <b>SN ONT:</b> <code>${escapeHtml(snOnt)}</code>\n`;
+    }
     if (catatan && catatan !== '-') {
-      msg += `📝 *Catatan:* ${catatan}\n`;
+      msg += `📝 <b>Catatan:</b> <i>${escapeHtml(catatan)}</i>\n`;
     }
-    msg += `🏠 *Address:* ${address}`;
+    msg += `🏠 <b>Address:</b> ${escapeHtml(address)}`;
 
     const buttons = [];
     if (phoneList.length === 1) {
@@ -124,13 +143,13 @@ async function handleBimaCommand(ctx, rawKeyword) {
     }
 
     if (buttons.length > 0) {
-      await ctx.reply(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+      await ctx.reply(msg, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
     } else {
-      await ctx.reply(msg, { parse_mode: 'Markdown' });
+      await ctx.reply(msg, { parse_mode: 'HTML' });
     }
   } catch (err) {
     console.error('[Command Error] /bima:', err.message);
-    ctx.reply('❌ Error: ' + err.message);
+    ctx.reply('❌ Error: ' + escapeHtml(err.message), { parse_mode: 'HTML' });
   }
 }
 

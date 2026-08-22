@@ -3,10 +3,14 @@ const { getSheetRows } = require('../config/google');
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_KAWAN_ID || '1gTlZxWfKlCENvDVEDKS_qHrLqNLBXsFsy0utTv2u_hY';
 const SHEET_NAME = 'INSERA';
+const SHEET_NAME_PANTAU = 'PANTAU TTR';
 
-const escapeMarkdown = (text) => {
-  if (!text) return '';
-  return text.toString().replace(/([*_[\]`])/g, '\\$1');
+const escapeHtml = (str) => {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 };
 
 const MONTH_NAMES = {
@@ -89,18 +93,47 @@ function extractPhoneNumbers(raw) {
   return unique;
 }
 
+function formatUkurDisplay(hasilUkur, redaman) {
+  const hu = (hasilUkur || '').trim().toUpperCase();
+  const red = (redaman || '').trim();
+  const redVal = parseFloat(red.replace(',', '.'));
+
+  if (hu === 'ONLINE') {
+    if (!isNaN(redVal)) {
+      if (redVal >= -24.0) {
+        return `🟢 <b>ONLINE</b> (<code>${redVal.toFixed(1)} dBm</code>)`;
+      } else {
+        return `🟡 <b>ONLINE</b> (<code>${redVal.toFixed(1)} dBm</code> - <i>Redaman Tinggi</i>)`;
+      }
+    }
+    return '🟢 <b>ONLINE</b>';
+  } else if (hu.includes('LOS') || hu.includes('LOSS')) {
+    return '🔴 <b>LOS</b>';
+  } else if (hu.includes('OFFLINE')) {
+    return '🔴 <b>OFFLINE</b>';
+  } else if (hu.includes('DYING')) {
+    return '⚪ <b>DYING GASP</b>';
+  } else if (hu && hu !== '-') {
+    return `⚪ <b>${escapeHtml(hu)}</b>`;
+  }
+  return '';
+}
+
 async function handleInseraCommand(ctx, rawTicket) {
   const searchedTicket = (rawTicket || '').trim().toUpperCase();
 
   if (!searchedTicket) {
-    return ctx.reply('⚠️ Format: `/insera <INCIDENT_ID>` atau langsung ketik `INC49917821`', { parse_mode: 'Markdown' });
+    return ctx.reply('⚠️ Format: <code>/insera &lt;INCIDENT_ID&gt;</code> atau langsung ketik <code>INC52287592</code>', { parse_mode: 'HTML' });
   }
 
   try {
-    const rows = await getSheetRows(SPREADSHEET_ID, SHEET_NAME);
-    
-    // Find matching incident accurately
-    const match = rows.find(r => {
+    // Ambil data dari tab INSERA dan tab PANTAU TTR secara paralel
+    const [rowsInsera, rowsPantau] = await Promise.all([
+      getSheetRows(SPREADSHEET_ID, SHEET_NAME).catch(() => []),
+      getSheetRows(SPREADSHEET_ID, SHEET_NAME_PANTAU).catch(() => [])
+    ]);
+
+    const findMatch = (rows) => rows.find(r => {
       for (const k in r) {
         if (k.toLowerCase().includes('incident') || k.toLowerCase().includes('ticket')) {
           const val = String(r[k] || '').trim().toUpperCase();
@@ -112,30 +145,36 @@ async function handleInseraCommand(ctx, rawTicket) {
       return false;
     });
 
-    if (!match) {
-      return ctx.reply(`⚠️ *TIKET TIDAK DITEMUKAN*\n━━━━━━━━━━━━━━━━━━\nMaaf, data untuk tiket \`${searchedTicket}\` tidak ditemukan di database Google Sheets.\n\nSilakan periksa kembali nomor tiket yang Anda masukkan.`, { parse_mode: 'Markdown' });
+    const matchInsera = findMatch(rowsInsera);
+    const matchPantau = findMatch(rowsPantau);
+
+    if (!matchInsera && !matchPantau) {
+      return ctx.reply(`⚠️ <b>TIKET TIDAK DITEMUKAN</b>\n━━━━━━━━━━━━━━━━━━\nMaaf, data untuk tiket <code>${escapeHtml(searchedTicket)}</code> tidak ditemukan di database Google Sheets.\n\nSilakan periksa kembali nomor tiket yang Anda masukkan.`, { parse_mode: 'HTML' });
     }
 
     const getVal = (keyNames) => {
-      for (const k of keyNames) {
-        const kLower = k.toLowerCase().trim();
-        // 1. Exact match
-        for (const realKey in match) {
-          const rkLower = realKey.toLowerCase().trim();
-          if (rkLower === kLower) {
-            const val = match[realKey];
-            if (val !== undefined && val !== null && String(val).trim() !== '') {
-              return String(val).trim();
+      // Prioritaskan dari PANTAU TTR dulu (karena sering diupdate teknisi/kawan), lalu fallback ke INSERA
+      const sources = [matchPantau, matchInsera].filter(Boolean);
+      for (const src of sources) {
+        for (const k of keyNames) {
+          const kLower = k.toLowerCase().trim();
+          // 1. Exact match
+          for (const realKey in src) {
+            if (realKey.toLowerCase().trim() === kLower) {
+              const val = src[realKey];
+              if (val !== undefined && val !== null && String(val).trim() !== '') {
+                return String(val).trim();
+              }
             }
           }
-        }
-        // 2. Prefix & Substring match (e.g. 'SUMMARY ...', 'REPORTED DATE ...', 'SERVICE NO ...')
-        for (const realKey in match) {
-          const rkLower = realKey.toLowerCase().trim();
-          if (rkLower.startsWith(kLower + ' ') || rkLower.startsWith(kLower + '_') || rkLower.startsWith(kLower + ':') || rkLower.includes(kLower)) {
-            const val = match[realKey];
-            if (val !== undefined && val !== null && String(val).trim() !== '') {
-              return String(val).trim();
+          // 2. Prefix / substring match
+          for (const realKey in src) {
+            const rkLower = realKey.toLowerCase().trim();
+            if (rkLower.startsWith(kLower + ' ') || rkLower.startsWith(kLower + '_') || rkLower.startsWith(kLower + ':') || rkLower.includes(kLower)) {
+              const val = src[realKey];
+              if (val !== undefined && val !== null && String(val).trim() !== '') {
+                return String(val).trim();
+              }
             }
           }
         }
@@ -146,48 +185,104 @@ async function handleInseraCommand(ctx, rawTicket) {
     const incident = getVal(['INCIDENT', 'Incident', 'TICKET ID']) || searchedTicket;
     const rawContactPhone = getVal(['CONTACT PHONE', 'Contact Phone', 'CONTACT_PHONE', 'CUSTOMER CATEGORY', 'CP']) || '-';
     const serviceNo = getVal(['SERVICE NO', 'Service No', 'SERVICE_NO', 'SERVICE ID']) || '-';
-    const reportedDate = escapeMarkdown(getVal(['REPORTED DATE', 'Reported Date', 'REPORTED_DATE', 'STATUS DATE']) || '-');
+    const reportedDate = getVal(['REPORTED DATE', 'Reported Date', 'REPORTED_DATE', 'STATUS DATE']) || '-';
 
-    let contactName = getVal(['CUSTOMER NAME', 'Customer Name', 'CUSTOMER_NAME', 'CONTACT NAME', 'Contact Name']) || '-';
-    contactName = escapeMarkdown(contactName.toUpperCase());
+    const contactName = (getVal(['CUSTOMER NAME', 'Customer Name', 'CUSTOMER_NAME', 'CONTACT NAME', 'Contact Name']) || '-').toUpperCase();
+    const customerType = (getVal(['CUSTOMER TYPE', 'Customer Type', 'CUSTOMER_TYPE']) || '-').toUpperCase();
+    const customerSegment = (getVal(['CUSTOMER SEGMENT', 'Customer Segment', 'CUSTOMER_SEGMENT', 'Segment', 'SEGMENT']) || '').toUpperCase();
 
-    let customerType = getVal(['CUSTOMER TYPE', 'Customer Type', 'CUSTOMER_TYPE', 'CUSTOMER SEGMENT', 'Segment', 'SEGMENT']) || '-';
-    customerType = escapeMarkdown(customerType.toUpperCase());
+    // Gabungkan segmen & tipe
+    let segDisplay = customerType;
+    if (customerSegment && customerSegment !== '-' && !customerType.includes(customerSegment)) {
+      segDisplay = customerType !== '-' ? `${customerType} (${customerSegment})` : customerSegment;
+    }
 
     const rawSummary = getVal(['SUMMARY', 'Summary', 'DESCRIPTION', 'Description', 'WORKLOG SUMMARY', 'SYMPTOM']) || '';
-    const summary = escapeMarkdown(rawSummary || '-');
+    const summary = rawSummary || '-';
 
     const bookingDate = getVal(['BOOKING DATE', 'Booking Date', 'BOOKING_DATE', 'Booking_Date']);
     const jamManja = getVal(['JAM MANJA', 'Jam Manja', 'JAM_MANJA', 'Jam_Manja']);
     const descAssign = getVal(['DESCRIPTION ASSIGMENT', 'Description Assignment', 'DESCRIPTION_ASSIGNMENT', 'DESCRIPTION ASSIGNMENT', 'Description Assigment']);
     const manjaInfo = parseManjaInfo(bookingDate, jamManja, descAssign, rawSummary);
 
-    let deviceName = getVal(['DEVICE NAME', 'Device Name', 'DEVICE_NAME', 'ODC', 'odc', 'RK INFORMATION']);
+    let deviceName = getVal(['DEVICE NAME', 'Device Name', 'DEVICE_NAME', 'ODC REAL', 'ODC', 'odc', 'RK INFORMATION']);
     if (!deviceName && rawSummary) {
       const odpMatch = rawSummary.match(/\b(ODP-[A-Za-z0-9\-/_]+(?:\s+[A-Za-z0-9\-/\.]+)?)\b/i);
       if (odpMatch) deviceName = odpMatch[1].toUpperCase();
     }
     if (!deviceName) deviceName = '-';
 
+    // Field tambahan sesuai permintaan: TIM, TTR, Hasil Ukur & Redaman, Status Garansi, Potensi Gaul, Status Kawan, Catatan
+    const tim = getVal(['TIM', 'Tim', 'TIM KAWAN', 'TIM INSERA', 'TECHNICIAN']) || '-';
+    const ttr = getVal(['TTR', 'ttr', 'TTR CUSTOMER', 'TTR END TO END']) || '-';
+    const hasilUkur = getVal(['HASIL UKUR', 'Hasil Ukur', 'hasil_ukur', 'ONU RX']);
+    const redaman = getVal(['REDAMAN', 'Redaman', 'redaman']);
+    const ukurDisplay = formatUkurDisplay(hasilUkur, redaman);
+
+    const statusGaransiRaw = getVal(['STATUS GARANSI', 'Status Garansi', 'GUARANTE STATUS', 'Guarante Status']) || '';
+    let statusGaransiDisplay = '-';
+    if (statusGaransiRaw && statusGaransiRaw !== '-') {
+      const gUpper = statusGaransiRaw.toUpperCase();
+      if (gUpper.includes('GARANSI') || gUpper === 'YES' || gUpper === 'TRUE' || gUpper === 'Y') {
+        statusGaransiDisplay = '🛡️ GARANSI';
+      } else if (gUpper.includes('NON') || gUpper.includes('NOT') || gUpper === 'NO') {
+        statusGaransiDisplay = 'Non Garansi';
+      } else {
+        statusGaransiDisplay = statusGaransiRaw;
+      }
+    }
+
+    const potensiGaulRaw = getVal(['POTENSI GAUL', 'Potensi Gaul', 'potensi_gaul', 'GAUL']) || '';
+    let potensiGaulDisplay = '-';
+    if (potensiGaulRaw && potensiGaulRaw !== '-') {
+      potensiGaulDisplay = potensiGaulRaw.toUpperCase().includes('GAUL') ? '🔄 GAUL' : potensiGaulRaw;
+    }
+
+    const statusKawan = getVal(['STATUS KAWAN', 'Status Kawan', 'status_kawan', 'STATUS']) || '';
+    const catatan = getVal(['CATATAN', 'Catatan', 'catatan', 'NOTE', 'Note']) || '';
+
     // Ekstrak dan bersihkan nomor HP (deduplikasi nomor ganda)
     const phoneList = extractPhoneNumbers(rawContactPhone + ' ' + rawSummary);
     const displayPhone = phoneList.length > 0 ? phoneList.join(' / ') : rawContactPhone;
 
-    let msg = '📌 *DETAIL TIKET GANGGUAN*\n';
+    let msg = '📌 <b>DETAIL TIKET GANGGUAN</b>\n';
     msg += '━━━━━━━━━━━━━━━━━━\n';
-    msg += `🆔 *Incident:* \`${incident}\`\n`;
-    msg += `📅 *Reported:* ${reportedDate}\n`;
-    msg += `👤 *Customer:* ${contactName}\n`;
-    msg += `💎 *Segment:* ${customerType}\n`;
-    if (manjaInfo) {
-      msg += `⏳ *Tiket Manja:* \`${escapeMarkdown(manjaInfo)}\`\n`;
+    msg += `🆔 <b>Incident:</b> <code>${escapeHtml(incident)}</code>\n`;
+    msg += `📅 <b>Reported:</b> ${escapeHtml(reportedDate)}\n`;
+    msg += `👤 <b>Customer:</b> ${escapeHtml(contactName)}\n`;
+    msg += `💎 <b>Segment:</b> ${escapeHtml(segDisplay)}\n`;
+    msg += `📞 <b>Contact:</b> <code>${escapeHtml(displayPhone)}</code>\n`;
+    msg += `🌐 <b>Service No:</b> <code>${escapeHtml(serviceNo)}</code>\n`;
+    msg += `🔌 <b>Device Name:</b> <code>${escapeHtml(deviceName)}</code>\n`;
+    
+    if (tim && tim !== '-') {
+      msg += `👷 <b>Tim:</b> <code>${escapeHtml(tim)}</code>\n`;
     }
-    msg += `📞 *Contact:* \`${displayPhone}\`\n`;
-    msg += `🌐 *Service No:* \`${serviceNo}\`\n`;
-    msg += `🔌 *Device Name:* \`${deviceName}\`\n`;
+    if (ttr && ttr !== '-') {
+      msg += `⏱️ <b>TTR:</b> <code>${escapeHtml(ttr)} Jam</code>\n`;
+    }
+    if (ukurDisplay) {
+      msg += `📊 <b>Hasil Ukur:</b> ${ukurDisplay}\n`;
+    }
+    if (statusGaransiDisplay && statusGaransiDisplay !== '-') {
+      msg += `🛡️ <b>Status Garansi:</b> ${escapeHtml(statusGaransiDisplay)}\n`;
+    }
+    if (potensiGaulDisplay && potensiGaulDisplay !== '-') {
+      msg += `🔄 <b>Potensi Gaul:</b> ${escapeHtml(potensiGaulDisplay)}\n`;
+    }
+    if (manjaInfo) {
+      msg += `⏳ <b>Tiket Manja:</b> <code>${escapeHtml(manjaInfo)}</code>\n`;
+    }
+    if (statusKawan && statusKawan !== '-') {
+      msg += `📋 <b>Status Kawan:</b> <b>${escapeHtml(statusKawan)}</b>\n`;
+    }
+    if (catatan && catatan !== '-') {
+      msg += `📝 <b>Catatan:</b> <i>${escapeHtml(catatan)}</i>\n`;
+    }
+
     msg += '━━━━━━━━━━━━━━━━━━\n';
-    msg += '📝 *Summary:*\n';
-    msg += summary;
+    msg += '📝 <b>Summary:</b>\n';
+    msg += escapeHtml(summary);
 
     const buttons = [];
     if (phoneList.length === 1) {
@@ -199,13 +294,13 @@ async function handleInseraCommand(ctx, rawTicket) {
     }
 
     if (buttons.length > 0) {
-      await ctx.reply(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+      await ctx.reply(msg, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
     } else {
-      await ctx.reply(msg, { parse_mode: 'Markdown' });
+      await ctx.reply(msg, { parse_mode: 'HTML' });
     }
   } catch (err) {
     console.error('[Command Error] /insera:', err.message);
-    ctx.reply('❌ Error: ' + err.message);
+    ctx.reply('❌ Error: ' + escapeHtml(err.message), { parse_mode: 'HTML' });
   }
 }
 
