@@ -187,6 +187,35 @@ async function handleInseraCommand(ctx, rawTicket) {
     const serviceNo = getVal(['SERVICE NO', 'Service No', 'SERVICE_NO', 'SERVICE ID']) || '-';
     const reportedDate = getVal(['REPORTED DATE', 'Reported Date', 'REPORTED_DATE', 'STATUS DATE']) || '-';
 
+function classifyTicket(summaryRaw, customerTypeRaw, customerSegmentRaw) {
+  const summary = (summaryRaw || '').toUpperCase();
+  const custType = (customerTypeRaw || '').toUpperCase();
+  const custSeg = (customerSegmentRaw || '').toUpperCase();
+
+  if (custSeg === 'RBS' || summary.includes('RBS') || custType.includes('RBS')) {
+    return { name: 'RBS', icon: '🏢', full: '🏢 RBS' };
+  }
+  if (summary.includes('SQM')) {
+    return { name: 'SQM', icon: '⚡', full: '⚡ SQM' };
+  }
+  if (summary.includes('UNSPEC') || summary.includes('UNSPEK')) {
+    return { name: 'Unspec', icon: '❓', full: '❓ Unspec' };
+  }
+  if (summary.includes('GAMAS')) {
+    return { name: 'GAMAS', icon: '🚨', full: '🚨 GAMAS' };
+  }
+  if (custType.includes('DIAMOND')) {
+    return { name: 'HVC Diamond', icon: '💠', full: '💠 HVC Diamond' };
+  }
+  if (custType.includes('PLATINUM')) {
+    return { name: 'HVC Platinum', icon: '💎', full: '💎 HVC Platinum' };
+  }
+  if (custType.includes('GOLD')) {
+    return { name: 'HVC Gold', icon: '🥇', full: '🥇 HVC Gold' };
+  }
+  return { name: 'Reguler', icon: '👤', full: '👤 Reguler' };
+}
+
     const contactName = (getVal(['CUSTOMER NAME', 'Customer Name', 'CUSTOMER_NAME', 'CONTACT NAME', 'Contact Name']) || '-').toUpperCase();
     const customerType = (getVal(['CUSTOMER TYPE', 'Customer Type', 'CUSTOMER_TYPE']) || '-').toUpperCase();
     const customerSegment = (getVal(['CUSTOMER SEGMENT', 'Customer Segment', 'CUSTOMER_SEGMENT', 'Segment', 'SEGMENT']) || '').toUpperCase();
@@ -199,6 +228,7 @@ async function handleInseraCommand(ctx, rawTicket) {
 
     const rawSummary = getVal(['SUMMARY', 'Summary', 'DESCRIPTION', 'Description', 'WORKLOG SUMMARY', 'SYMPTOM']) || '';
     const summary = rawSummary || '-';
+    const ticketType = classifyTicket(rawSummary, customerType, customerSegment);
 
     const bookingDate = getVal(['BOOKING DATE', 'Booking Date', 'BOOKING_DATE', 'Booking_Date']);
     const jamManja = getVal(['JAM MANJA', 'Jam Manja', 'JAM_MANJA', 'Jam_Manja']);
@@ -250,6 +280,7 @@ async function handleInseraCommand(ctx, rawTicket) {
     msg += `🆔 <b>Incident:</b> <code>${escapeHtml(incident)}</code>\n`;
     msg += `📅 <b>Reported:</b> ${escapeHtml(reportedDate)}\n`;
     msg += `👤 <b>Customer:</b> ${escapeHtml(contactName)}\n`;
+    msg += `🏷️ <b>Type Tiket:</b> <b>${escapeHtml(ticketType.full)}</b>\n`;
     msg += `💎 <b>Segment:</b> ${escapeHtml(segDisplay)}\n`;
     msg += `📞 <b>Contact:</b> <code>${escapeHtml(displayPhone)}</code>\n`;
     msg += `🌐 <b>Service No:</b> <code>${escapeHtml(serviceNo)}</code>\n`;
